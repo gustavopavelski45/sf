@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JBA Dashboard – Field Inspector Reports</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav class="app-nav">
+  <a class="nav-brand" href="/">
+    <div class="nav-logo">JBA</div>
+    <div>
+      <div class="nav-title">Office Dashboard</div>
+      <div class="nav-subtitle" id="navSubtitle">Loading…</div>
+    </div>
+  </a>
+  <div class="nav-actions">
+    <button class="btn-nav" onclick="exportCSV()"><i class="bi bi-download"></i>Export CSV</button>
+    <a href="/" class="btn-nav btn-nav-primary"><i class="bi bi-plus-circle"></i>New Report</a>
+  </div>
+</nav>
+
+<div class="page-wrap-wide">
+
+  <div class="stats-grid" style="grid-template-columns:repeat(5,1fr);">
+    <div class="stat-tile blue">
+      <i class="bi bi-file-text stat-ico"></i>
+      <div class="stat-num" id="statTotal">–</div>
+      <div class="stat-lbl">Total Reports</div>
+    </div>
+    <div class="stat-tile green">
+      <i class="bi bi-calendar-check stat-ico"></i>
+      <div class="stat-num" id="statToday">–</div>
+      <div class="stat-lbl">Today</div>
+    </div>
+    <div class="stat-tile red">
+      <i class="bi bi-geo-alt stat-ico"></i>
+      <div class="stat-num" id="statBad">–</div>
+      <div class="stat-lbl">Bad Address</div>
+    </div>
+    <div class="stat-tile amber">
+      <i class="bi bi-lock stat-ico"></i>
+      <div class="stat-num" id="statOther">–</div>
+      <div class="stat-lbl">Gated / Asked</div>
+    </div>
+    <div class="stat-tile" style="border-bottom:3px solid var(--teal);">
+      <i class="bi bi-telephone-fill stat-ico" style="color:var(--teal);"></i>
+      <div class="stat-num" id="statCalls">–</div>
+      <div class="stat-lbl">Calls Done</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 260px;gap:14px;margin-bottom:14px;">
+    <div class="card" style="margin-bottom:0;">
+      <div class="card-header">
+        <i class="bi bi-activity" style="color:var(--blue-bright);font-size:14px;"></i>
+        <span class="card-header-label">Reports — Last 7 Days</span>
+      </div>
+      <div id="chartArea" class="chart-wrap"></div>
+    </div>
+    <div class="card" style="margin-bottom:0;overflow:hidden;">
+      <div class="card-header">
+        <i class="bi bi-people" style="color:var(--blue-bright);font-size:14px;"></i>
+        <span class="card-header-label">Top Inspectors</span>
+      </div>
+      <div id="inspectorList" style="padding:8px 0;">
+        <div style="padding:20px;text-align:center;color:var(--gray-400);font-size:12px;">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="filter-group grow">
+      <div class="filter-label">Search</div>
+      <input type="text" class="filter-input" id="filterSearch"
+             placeholder="Address, inspector, PH name, order #…" oninput="loadReports()" />
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">From</div>
+      <input type="date" class="filter-input" id="filterStart" onchange="loadReports()" />
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">To</div>
+      <input type="date" class="filter-input" id="filterEnd" onchange="loadReports()" />
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">Reason</div>
+      <select class="filter-input" id="filterReason" onchange="loadReports()">
+        <option value="">All reasons</option>
+        <option value="bad_address">Bad Address</option>
+        <option value="asked_to_leave">Asked to Leave</option>
+        <option value="gated">Gated</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">Inspector</div>
+      <select class="filter-input" id="filterInspector" onchange="loadReports()">
+        <option value="">All inspectors</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <div class="filter-label">Call Status</div>
+      <select class="filter-input" id="filterCall" onchange="loadReports()">
+        <option value="">All calls</option>
+        <option value="pending">Pending</option>
+        <option value="calling">In Progress</option>
+        <option value="answered">Answered</option>
+        <option value="voicemail">Voicemail</option>
+        <option value="no_answer">No Answer</option>
+      </select>
+    </div>
+    <button class="btn-filter-clear" onclick="clearFilters()"><i class="bi bi-x-lg"></i> Clear</button>
+  </div>
+
+  <div class="table-card">
+    <div style="overflow-x:auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="padding-left:20px;">#</th>
+            <th>Date</th>
+            <th>Inspector</th>
+            <th>Address</th>
+            <th>Order #</th>
+            <th>Reason</th>
+            <th>Call Status</th>
+            <th>48h SLA</th>
+            <th style="text-align:center;">Photos</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="10"><div class="table-empty">
+            <span class="spin" style="width:24px;height:24px;border-width:3px;display:inline-block;"></span>
+          </div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-footer" id="tableFooter"></div>
+  </div>
+
+</div>
+
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal-box">
+    <div class="modal-head">
+      <i class="bi bi-file-earmark-text" style="color:var(--blue-bright);"></i>
+      <div class="modal-title" id="modalTitle">Report Details</div>
+      <button class="modal-close" onclick="closeModal()"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body" id="modalBody">
+      <div style="text-align:center;padding:40px;">
+        <span class="spin" style="width:32px;height:32px;border-width:3px;display:inline-block;"></span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" onclick="deleteReport()"><i class="bi bi-trash"></i> Delete</button>
+      <button class="btn btn-secondary" onclick="closeModal()"><i class="bi bi-x"></i> Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+const REASONS = {
+  bad_address:    { label: 'Bad Address',    cls: 'badge-bad',   icon: 'bi-geo-alt-fill'  },
+  asked_to_leave: { label: 'Asked to Leave', cls: 'badge-leave', icon: 'bi-person-x-fill' },
+  gated:          { label: 'Gated',          cls: 'badge-gated', icon: 'bi-lock-fill'     },
+};
+
+const CALL_STATUS = {
+  pending:   { label: 'Pending',    cls: 'cs-pending',   icon: 'bi-clock'              },
+  calling:   { label: 'In Call',    cls: 'cs-calling',   icon: 'bi-telephone-fill'     },
+  answered:  { label: 'Answered',   cls: 'cs-answered',  icon: 'bi-check-circle-fill'  },
+  voicemail: { label: 'Voicemail',  cls: 'cs-voicemail', icon: 'bi-voicemail'          },
+  no_answer: { label: 'No Answer',  cls: 'cs-no_answer', icon: 'bi-telephone-x-fill'   },
+  error:     { label: 'Error',      cls: 'cs-error',     icon: 'bi-exclamation-circle' },
+};
+
+let currentId = null;
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadStats();
+  loadInspectors();
+  loadReports();
+  setInterval(() => { loadStats(); loadReports(); }, 30_000);
+  setInterval(updateVisibleSlaClocks, 1_000);
+});
+
+async function loadStats() {
+  try {
+    const s = await fetch('/api/stats').then(r => r.json());
+    document.getElementById('statTotal').textContent = s.totalReports || 0;
+    document.getElementById('statToday').textContent = s.today || 0;
+    document.getElementById('statBad').textContent   = s.badAddress || 0;
+    document.getElementById('statOther').textContent = (s.gated || 0) + (s.askedLeave || 0);
+    document.getElementById('statCalls').textContent = s.callDone || 0;
+    document.getElementById('navSubtitle').textContent =
+      `${s.totalReports||0} report${(s.totalReports||0)!==1?'s':''} · ${s.officeDueSoon||0} due soon · ${s.officeOverdue||0} overdue · ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`;
+    renderChart(s.last7 || {});
+    renderInspectorList(s.byInspector || []);
+  } catch(e) { document.getElementById('navSubtitle').textContent = 'Error loading stats'; }
+}
+
+function renderChart(last7) {
+  const area    = document.getElementById('chartArea');
+  const entries = Object.entries(last7);
+  if (!entries.length) { area.innerHTML = '<div style="margin:auto;color:var(--gray-400);font-size:12px;">No data</div>'; return; }
+  const max = Math.max(...entries.map(([,v]) => v), 1);
+  area.innerHTML = entries.map(([date, count]) => {
+    const pct   = (count / max) * 100;
+    const label = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
+    return `<div class="chart-col">
+      <div class="chart-bar" style="height:${Math.max(pct,3)}%;" title="${count} on ${label}">
+        ${count > 0 ? `<span class="chart-bar-val">${count}</span>` : ''}
+      </div>
+      <div class="chart-lbl">${label}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderInspectorList(list) {
+  const el = document.getElementById('inspectorList');
+  if (!list.length) { el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-400);font-size:12px;">No data</div>'; return; }
+  const max = list[0]?.total || 1;
+  el.innerHTML = list.slice(0,6).map(ins => {
+    const initials = ins.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    return `<div class="inspector-row">
+      <div class="ins-avatar">${initials}</div>
+      <div class="ins-name">${esc(ins.name)}</div>
+      <div class="ins-bar-wrap"><div class="ins-bar-fill" style="width:${(ins.total/max)*100}%"></div></div>
+      <div class="ins-count">${ins.total}</div>
+    </div>`;
+  }).join('');
+}
+
+async function loadInspectors() {
+  try {
+    const names = await fetch('/api/inspectors').then(r => r.json());
+    const sel = document.getElementById('filterInspector');
+    sel.innerHTML = '<option value="">All inspectors</option>';
+    names.forEach(n => { const o = document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+  } catch(_) {}
+}
+
+async function loadReports() {
+  const search = document.getElementById('filterSearch').value.trim();
+  const start  = document.getElementById('filterStart').value;
+  const end    = document.getElementById('filterEnd').value;
+  const reason = document.getElementById('filterReason').value;
+  const inspector = document.getElementById('filterInspector').value;
+  const callSt = document.getElementById('filterCall').value;
+  const params = new URLSearchParams();
+  if (search)    params.set('search', search);
+  if (start)     params.set('start_date', start);
+  if (end)       params.set('end_date', end);
+  if (reason)    params.set('reason', reason);
+  if (inspector) params.set('inspector', inspector);
+  if (callSt)    params.set('call_status', callSt);
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = `<tr><td colspan="10"><div class="table-empty">
+    <span class="spin" style="width:24px;height:24px;border-width:3px;display:inline-block;"></span>
+  </div></td></tr>`;
+  try {
+    const rows = await fetch('/api/reports?' + params).then(r => r.json());
+    renderTable(rows);
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="10"><div class="table-empty"><i class="bi bi-wifi-off"></i>Could not load reports</div></td></tr>`;
+  }
+}
+
+function renderTable(rows) {
+  const tbody  = document.getElementById('tableBody');
+  const footer = document.getElementById('tableFooter');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="10"><div class="table-empty"><i class="bi bi-inbox"></i>No reports found</div></td></tr>`;
+    footer.textContent = '';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const rm = REASONS[r.reason] || { label: r.reason||'–', cls:'badge-code', icon:'bi-question' };
+    const cs = CALL_STATUS[r.call_status] || CALL_STATUS.pending;
+    const dt = new Date(r.created_at);
+    const photos = (r.order_screenshot?1:0) + (r.justification_photo?1:0) + (r.call_screenshot?1:0);
+    return `
+    <tr onclick="openDetail(${r.id})">
+      <td style="padding-left:20px;" class="td-id">#${r.id}</td>
+      <td class="td-date">
+        <div class="dt-day">${dt.toLocaleDateString('en-US',{month:'short',day:'2-digit'})}</div>
+        <div class="dt-time">${dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</div>
+      </td>
+      <td class="td-inspector">${esc(r.inspector_name||'–')}</td>
+      <td class="td-address" title="${esc(r.address||'')}">${esc(r.address||'–')}</td>
+      <td><span class="mono-code">${esc(r.order_number||'–')}</span></td>
+      <td><span class="badge ${rm.cls}"><i class="bi ${rm.icon}"></i>${rm.label}</span></td>
+      <td><span class="badge ${cs.cls}" style="white-space:nowrap;">
+        <i class="bi ${cs.icon}"></i>${cs.label}
+        ${r.call_status==='calling'?'<span class="spin" style="width:10px;height:10px;border-width:1.5px;display:inline-block;margin-left:3px;"></span>':''}
+      </span></td>
+      <td>${slaBadge(r.office_timer)}</td>
+      <td style="text-align:center;">
+        ${photos ? `<span class="badge badge-photo"><i class="bi bi-images"></i>${photos}</span>` : '<span style="color:var(--gray-400);font-size:11px;">–</span>'}
+      </td>
+      <td class="td-arrow"><i class="bi bi-chevron-right"></i></td>
+    </tr>`;
+  }).join('');
+  footer.textContent = `${rows.length} report${rows.length!==1?'s':''}`;
+  updateVisibleSlaClocks();
+}
+
+function slaBadge(timer) {
+  if (!timer) return '<span class="badge badge-code">No SLA</span>';
+  const map = timer.status === 'closed'
+    ? { cls:'cs-answered', icon:'bi-check2-circle', label:'Closed' }
+    : timer.status === 'overdue'
+      ? { cls:'cs-error', icon:'bi-exclamation-octagon-fill', label:'Overdue' }
+      : { cls:'cs-pending', icon:'bi-hourglass-split', label:'48h' };
+  return `<span class="badge ${map.cls}" data-sla-ms="${timer.remaining_ms||0}" data-sla-status="${timer.status}" style="white-space:nowrap;">
+    <i class="bi ${map.icon}"></i><span class="sla-label">${map.label}</span>${timer.status==='active' ? ` · <span class="sla-live">${formatDuration(timer.remaining_ms||0)}</span>` : ''}
+  </span>`;
+}
+
+function formatDuration(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function updateVisibleSlaClocks() {
+  document.querySelectorAll('[data-sla-ms][data-sla-status="active"]').forEach(el => {
+    const current = Number(el.dataset.slaMs || '0');
+    const next = Math.max(0, current - 1000);
+    el.dataset.slaMs = String(next);
+    const live = el.querySelector('.sla-live');
+    if (live) live.textContent = formatDuration(next);
+    if (next === 0) {
+      el.dataset.slaStatus = 'overdue';
+      el.className = 'badge cs-error';
+      el.innerHTML = `<i class="bi bi-exclamation-octagon-fill"></i><span class="sla-label">Overdue</span>`;
+    }
+  });
+}
+
+async function openDetail(id) {
+  currentId = id;
+  document.getElementById('modalBody').innerHTML =
+    `<div style="text-align:center;padding:40px;"><span class="spin" style="width:32px;height:32px;border-width:3px;display:inline-block;"></span></div>`;
+  document.getElementById('modalOverlay').classList.add('open');
+  try {
+    const r  = await fetch(`/api/reports/${id}`).then(x => x.json());
+    const rm = REASONS[r.reason] || { label: r.reason||'–', cls:'badge-code', icon:'bi-question' };
+    const cs = CALL_STATUS[r.call_status] || CALL_STATUS.pending;
+    const dt = new Date(r.created_at).toLocaleString('en-US',{month:'short',day:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const timer = r.office_timer;
+    document.getElementById('modalTitle').textContent = `Report #${r.id}`;
+
+    let callLogHtml = '';
+    if (r.calls?.length) {
+      callLogHtml = `<div class="call-log">
+        <div class="call-log-title"><i class="bi bi-telephone-fill"></i>Call Log</div>
+        ${r.calls.map(c => {
+          const cst = CALL_STATUS[c.status] || CALL_STATUS.pending;
+          const typeLabel = c.type === 'policy_holder' ? 'Policy Holder' : 'Agent';
+          return `<div class="call-log-entry">
+            <div class="call-log-type">${typeLabel}</div>
+            <div>
+              <div class="call-log-phone">${esc(c.phone||'')}</div>
+              <div class="call-log-meta">
+                <span class="badge ${cst.cls}" style="font-size:10px;padding:1px 6px;">
+                  <i class="bi ${cst.icon}"></i>${cst.label}
+                </span>
+                ${c.answered_by ? ` · Answered by: ${esc(c.answered_by)}` : ''}
+                ${c.dispatched_at ? ` · ${new Date(c.dispatched_at).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}` : ''}
+              </div>
+              ${c.summary ? `<div class="call-log-summary">"${esc(c.summary)}"</div>` : ''}
+              ${c.recording_url ? `<a href="${esc(c.recording_url)}" target="_blank" class="recording-link" style="margin-top:5px;display:inline-flex;">
+                <i class="bi bi-play-circle-fill"></i>Listen to Recording
+              </a>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+
+    const officeAlert = r.office_alert_text
+      ? `<div class="notes-box" style="background:#fff7ed;border-color:#fdba74;">
+          <div class="notes-label"><i class="bi bi-bell-fill"></i> Office Alert</div>${esc(r.office_alert_text)}
+          <div style="margin-top:8px;color:var(--gray-500);font-size:12px;">${r.office_alert_sent_at ? `Alert prepared at ${new Date(r.office_alert_sent_at).toLocaleString('en-US')}` : 'Alert not sent yet.'}</div>
+        </div>`
+      : '';
+
+    const timerPanel = `<div class="notes-box" style="background:#eff6ff;border-color:#93c5fd;">
+      <div class="notes-label"><i class="bi bi-hourglass-split"></i> 48-Hour Safeguard Closure Timer</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:24px;font-weight:800;color:var(--navy);margin-bottom:6px;">${timer?.status==='closed' ? 'Closed' : timer?.status==='overdue' ? 'Overdue' : formatDuration(timer?.remaining_ms||0)}</div>
+          <div style="color:var(--gray-500);font-size:12px;">Started: ${timer?.start_at ? new Date(timer.start_at).toLocaleString('en-US') : '—'} · Due: ${timer?.due_at ? new Date(timer.due_at).toLocaleString('en-US') : '—'}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary" onclick="event.stopPropagation(); startOfficeTimer(${r.id})"><i class="bi bi-arrow-repeat"></i> Start / Reset 48h Timer</button>
+          <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);" onclick="event.stopPropagation(); closeOfficeWork(${r.id})"><i class="bi bi-check2-circle"></i> Mark Office Closed</button>
+          <button class="btn btn-secondary" onclick="event.stopPropagation(); copyOfficeAlert(${JSON.stringify(r.office_alert_text || '')})"><i class="bi bi-clipboard-check"></i> Copy Office Alert</button>
+        </div>
+      </div>
+    </div>`;
+
+    document.getElementById('modalBody').innerHTML = `
+    <div style="padding:16px;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        <span class="badge ${rm.cls}" style="padding:6px 12px;font-size:12px;"><i class="bi ${rm.icon}"></i>${rm.label}</span>
+        <span class="badge badge-code" style="padding:6px 12px;font-size:12px;"><i class="bi bi-person"></i>${esc(r.inspector_name||'–')}</span>
+        <span class="badge ${cs.cls}" style="padding:6px 12px;font-size:12px;"><i class="bi ${cs.icon}"></i>${cs.label}</span>
+        <span class="badge badge-code" style="padding:6px 12px;font-size:12px;font-family:var(--mono);"><i class="bi bi-clock"></i>${dt}</span>
+        ${slaBadge(timer)}
+      </div>
+      ${timerPanel}
+      ${officeAlert}
+      <div class="detail-grid">
+        ${dF('Property Address', r.address, true)}
+        ${dF('Work Code', r.work_code)}
+        ${dF('Client', r.client)}
+        ${dF('Due Date', r.due_date)}
+        ${dF('Lockbox Code', r.lockbox_code)}
+        ${dF('Property Name', r.property_name)}
+        ${dF('Order Number', r.order_number)}
+        ${dF('Insurance Carrier', r.insurance_carrier)}
+      </div>
+      ${(r.policy_holder_name || r.policy_holder_phone || r.agent_name || r.agent_phone) ? `
+      <div style="margin-bottom:14px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--gray-400);margin-bottom:8px;"><i class="bi bi-people-fill"></i> Contacts</div>
+        <div class="detail-grid">
+          ${dF('Policy Holder', r.policy_holder_name ? `${r.policy_holder_name}${r.policy_holder_phone?' · '+r.policy_holder_phone:''}` : r.policy_holder_phone)}
+          ${dF('Agent', r.agent_name ? `${r.agent_name}${r.agent_phone?' · '+r.agent_phone:''}` : r.agent_phone)}
+        </div>
+      </div>` : ''}
+      ${r.notes ? `<div class="notes-box"><div class="notes-label"><i class="bi bi-chat-text"></i>Notes</div>${esc(r.notes)}</div>` : ''}
+      ${callLogHtml}
+      ${(r.order_screenshot || r.justification_photo || r.call_screenshot) ? `
+      <div style="margin-top:14px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--gray-400);margin-bottom:8px;"><i class="bi bi-images"></i> Photos</div>
+        <div class="photos-row" style="grid-template-columns:repeat(${[r.order_screenshot,r.justification_photo,r.call_screenshot].filter(Boolean).length},1fr);">
+          ${r.order_screenshot    ? photoTile('uploads/orders/'+r.order_screenshot,        'Order Screenshot')         : ''}
+          ${r.justification_photo ? photoTile('uploads/justifications/'+r.justification_photo,'Justification Photo')   : ''}
+          ${r.call_screenshot     ? photoTile('uploads/calls/'+r.call_screenshot,           'Call Screenshot')         : ''}
+        </div>
+      </div>` : ''}
+    </div>`;
+    updateVisibleSlaClocks();
+  } catch(e) {
+    document.getElementById('modalBody').innerHTML =
+      `<div style="padding:40px;text-align:center;color:var(--red);">Failed to load report.</div>`;
+  }
+}
+
+async function startOfficeTimer(id) {
+  try {
+    const resp = await fetch(`/api/reports/${id}/office-timer/start`, { method: 'POST' });
+    const json = await resp.json();
+    if (!resp.ok) throw new Error(json.error || 'Could not start timer');
+    toast('48-hour timer started for office.', 'success');
+    await loadStats();
+    await loadReports();
+    if (currentId === id) openDetail(id);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function closeOfficeWork(id) {
+  try {
+    const resp = await fetch(`/api/reports/${id}/office-close`, { method: 'POST' });
+    const json = await resp.json();
+    if (!resp.ok) throw new Error(json.error || 'Could not mark office work as closed');
+    toast('Office work marked as closed.', 'success');
+    await loadStats();
+    await loadReports();
+    if (currentId === id) openDetail(id);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function copyOfficeAlert(text) {
+  try {
+    await navigator.clipboard.writeText(text || '');
+    toast('Office alert copied.', 'success');
+  } catch (e) {
+    toast('Could not copy alert text.', 'error');
+  }
+}
+
+function dF(label, value, full=false) {
+  if (!value) return '';
+  return `<div class="detail-field${full?' full':''}">
+    <div class="d-lbl">${label}</div>
+    <div class="d-val">${esc(value)}</div>
+  </div>`;
+}
+
+function photoTile(src, label) {
+  return `<div class="photo-tile">
+    <div class="photo-tile-lbl">${label}</div>
+    <a href="/${src}" target="_blank"><img src="/${src}" loading="lazy" /></a>
+  </div>`;
+}
+
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); currentId = null; }
+function closeModalOutside(e) { if (e.target===document.getElementById('modalOverlay')) closeModal(); }
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
+
+async function deleteReport() {
+  if (!currentId || !confirm('Delete this report? Cannot be undone.')) return;
+  try {
+    const resp = await fetch(`/api/reports/${currentId}`, { method: 'DELETE' });
+    if (!resp.ok) throw new Error('Delete failed');
+    closeModal();
+    toast('Report deleted.', 'success');
+    loadStats(); loadReports();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function clearFilters() {
+  ['filterSearch','filterStart','filterEnd'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('filterReason').value='';
+  document.getElementById('filterInspector').value='';
+  document.getElementById('filterCall').value='';
+  loadReports();
+}
+
+function exportCSV() { window.open('/api/export.csv','_blank'); }
+
+function toast(msg, type='success') {
+  const wrap = document.getElementById('toastWrap');
+  const el   = document.createElement('div');
+  el.className = `toast-msg toast-${type}`;
+  el.innerHTML = `${type==='success'
+    ? '<i class="bi bi-check-circle-fill" style="color:var(--green)"></i>'
+    : '<i class="bi bi-exclamation-triangle-fill" style="color:var(--red)"></i>'
+  }<span>${msg}</span>`;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function esc(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

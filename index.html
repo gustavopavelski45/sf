@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>JBA Field Inspector – Submit Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ── Step 5 extras ── */
+    .contact-block {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .contact-block-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--gray-400);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .contact-block-title i { font-size: 13px; }
+    .contact-block-title.ph { color: var(--blue); }
+    .contact-block-title.ag { color: var(--teal); }
+
+    .bland-panel {
+      border: 1.5px solid var(--blue);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-top: 14px;
+    }
+    .bland-header {
+      background: linear-gradient(135deg, var(--navy-mid), var(--navy-light));
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .bland-logo {
+      background: var(--blue);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 7px;
+      border-radius: 3px;
+      letter-spacing: 0.04em;
+    }
+    .bland-title {
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      flex: 1;
+    }
+    .bland-body { padding: 14px 16px; }
+
+    .call-target {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+    }
+    .call-target-icon { font-size: 18px; flex-shrink: 0; }
+    .call-target-icon.ph { color: var(--blue); }
+    .call-target-icon.ag { color: var(--teal); }
+    .call-target-info { flex: 1; min-width: 0; }
+    .call-target-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .call-target-phone { font-family: var(--mono); font-size: 12px; color: var(--gray-400); }
+    .call-target-status { flex-shrink: 0; }
+
+    .btn-dispatch {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, var(--navy-light), var(--blue));
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--sans);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 3px 16px rgba(30,95,216,0.3);
+      transition: all 0.2s;
+      margin-top: 10px;
+    }
+    .btn-dispatch:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(30,95,216,0.4); }
+    .btn-dispatch:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .call-status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      margin-top: 10px;
+    }
+    .call-status-row.calling  { background: rgba(30,95,216,0.07); border: 1px solid rgba(30,95,216,0.2); color: var(--navy-light); }
+    .call-status-row.success  { background: rgba(31,186,116,0.07); border: 1px solid rgba(31,186,116,0.3); color: #0d5c3a; }
+    .call-status-row.error    { background: rgba(224,53,53,0.07); border: 1px solid rgba(224,53,53,0.2); color: #7d1616; }
+
+    .call-screenshot-zone {
+      margin-top: 14px;
+      border-top: 1px solid var(--gray-200);
+      padding-top: 14px;
+    }
+    .call-screenshot-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--gray-400);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .step5-skip {
+      font-size: 11px;
+      color: var(--gray-400);
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* pill badge for call status */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .pill-calling  { background: rgba(30,95,216,0.12); color: var(--blue); }
+    .pill-answered { background: rgba(31,186,116,0.12); color: #0d7a4e; }
+    .pill-vm       { background: rgba(245,166,35,0.12); color: #8a5800; }
+    .pill-none     { background: rgba(224,53,53,0.10); color: var(--red); }
+    .pill-error    { background: rgba(224,53,53,0.10); color: var(--red); }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────────────────── -->
+<nav class="app-nav">
+  <a class="nav-brand" href="/">
+    <div class="nav-logo">JBA</div>
+    <div>
+      <div class="nav-title">Field Inspector</div>
+      <div class="nav-subtitle">Non-Completion Report</div>
+    </div>
+  </a>
+  <div class="nav-actions">
+    <a href="dashboard.html" class="btn-nav">
+      <i class="bi bi-bar-chart-line"></i>Dashboard
+    </a>
+  </div>
+</nav>
+
+<div class="page-wrap">
+
+  <!-- ── STEP 1: Order Screenshot ─────────────────────────── -->
+  <div class="card">
+  <div class="card-header">
+    <span class="step-num">1</span>
+    <span class="card-header-label">Order Screenshot — Details Tab</span>
+    <span style="font-size:11px;color:rgba(255,255,255,0.4);font-family:var(--mono);">OCR Auto-Fill</span>
+  </div>
+
+  <div class="card-body">
+    <label id="screenshotDropZone" class="drop-zone" for="screenshotInput"
+           ondragover="handleDragOver(event)"
+           ondrop="handleDrop(event,'screenshot')"
+           ondragleave="this.classList.remove('dragover')">
+      <i class="bi bi-cloud-arrow-up-fill drop-icon"></i>
+      <div class="drop-label">Tap to select · photo or gallery</div>
+      <div class="drop-hint">Details tab · JPG · PNG · HEIC · max 15 MB</div>
+      <input
+        type="file"
+        id="screenshotInput"
+        accept="image/*"
+        style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;"
+      />
+    </label>
+
+    <div id="previewArea" style="display:none">
+      <div class="preview-wrap">
+        <img id="previewImg" class="preview-img" />
+        <div class="preview-footer">
+          <span class="preview-name" id="previewName">–</span>
+          <button class="btn-remove" onclick="clearScreenshot()">
+            <i class="bi bi-x-circle"></i> Remove
+          </button>
+        </div>
+      </div>
+
+      <div id="ocrBox" class="ocr-box info">
+        <div class="ocr-row">
+          <span class="spin"></span>
+          <span>Sending to OCR engine…</span>
+        </div>
+        <div class="ocr-bar-wrap">
+          <div class="ocr-bar-fill" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+  <!-- ── STEP 2: Order Details ─────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <span class="step-num">2</span>
+      <span class="card-header-label">Order Details</span>
+      <span style="font-size:11px;color:rgba(255,255,255,0.4);font-family:var(--mono);">Review &amp; correct</span>
+    </div>
+    <div class="card-body">
+      <div class="field-group">
+        <label class="field-label" for="inspectorName">Inspector Name <span class="req">*</span></label>
+        <input type="text" id="inspectorName" class="field-input" placeholder="Your full name" autocomplete="name" />
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="fieldAddress">Property Address <span class="req">*</span></label>
+        <textarea id="fieldAddress" class="field-input" rows="2" placeholder="126 Swaim Ave, Frederica, DE 19946"></textarea>
+      </div>
+      <div class="fields-grid">
+        <div class="field-group">
+          <label class="field-label" for="fieldWorkCode">Work Code</label>
+          <input type="text" id="fieldWorkCode" class="field-input" placeholder="E3RNN" />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="fieldClient">Client</label>
+          <input type="text" id="fieldClient" class="field-input" placeholder="STFARM" />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="fieldDueDate">Due Date</label>
+          <input type="text" id="fieldDueDate" class="field-input" placeholder="MM/DD/YYYY" />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="fieldLockbox">Lockbox Code</label>
+          <input type="text" id="fieldLockbox" class="field-input" placeholder="1845" />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="fieldName">Property Name</label>
+          <input type="text" id="fieldName" class="field-input" placeholder="LUPSY WALLACE" />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="fieldOrderNum">Order Number</label>
+          <input type="text" id="fieldOrderNum" class="field-input" placeholder="353729132" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: Reason ───────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <span class="step-num">3</span>
+      <span class="card-header-label">Reason for Non-Completion <span style="color:rgba(255,100,100,0.8)">*</span></span>
+    </div>
+    <div class="card-body">
+      <div class="reason-grid">
+        <label class="reason-card" id="card_bad_address">
+          <input type="radio" name="reason" value="bad_address" class="reason-radio" />
+          <i class="bi bi-geo-alt-fill r-icon bad"></i>
+          <span class="r-label">Bad Address</span>
+          <span class="r-desc">Property not found / incorrect address</span>
+        </label>
+        <label class="reason-card" id="card_asked_to_leave">
+          <input type="radio" name="reason" value="asked_to_leave" class="reason-radio" />
+          <i class="bi bi-person-x-fill r-icon leave"></i>
+          <span class="r-label">Asked to Leave</span>
+          <span class="r-desc">Occupant requested departure</span>
+        </label>
+        <label class="reason-card" id="card_gated">
+          <input type="radio" name="reason" value="gated" class="reason-radio" />
+          <i class="bi bi-lock-fill r-icon gated"></i>
+          <span class="r-label">Gated</span>
+          <span class="r-desc">Access blocked by gate / fence</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: Justification Photo + Notes ──────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <span class="step-num">4</span>
+      <span class="card-header-label">Justification Photo &amp; Notes</span>
+    </div>
+    <div class="card-body">
+      <div id="justDropZone" class="drop-zone drop-zone-sm"
+           onclick="document.getElementById('justInput').click()"
+           ondragover="handleDragOver(event)"
+           ondrop="handleDrop(event,'just')"
+           ondragleave="this.classList.remove('dragover')"
+           style="margin-bottom:12px;">
+        <i class="bi bi-camera drop-icon" style="font-size:22px;"></i>
+        <div class="drop-label" style="font-size:12px;">Take or upload justification photo</div>
+        <input type="file" id="justInput" accept="image/*" style="display:none" />
+      </div>
+      <div id="justPreviewArea" style="display:none;margin-bottom:12px;">
+        <div class="preview-wrap">
+          <img id="justPreviewImg" class="preview-img" />
+          <div class="preview-footer">
+            <span class="preview-name" id="justPreviewName">–</span>
+            <button class="btn-remove" onclick="clearJust()"><i class="bi bi-x-circle"></i> Remove</button>
+          </div>
+        </div>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="fieldNotes">Notes / Comments</label>
+        <textarea id="fieldNotes" class="field-input" rows="3"
+                  placeholder="Additional context, observations, gate code attempts…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 5: Contacts + Bland ─────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <span class="step-num">5</span>
+      <span class="card-header-label">Contact Info &amp; Auto-Call</span>
+      <span style="font-size:11px;color:rgba(255,255,255,0.4);font-family:var(--mono);">Bland.ai</span>
+    </div>
+    <div class="card-body">
+
+      <!-- Instructions screenshot upload -->
+      <div id="contactsDropZone" class="drop-zone drop-zone-sm"
+           onclick="document.getElementById('contactsInput').click()"
+           ondragover="handleDragOver(event)"
+           ondrop="handleDrop(event,'contacts')"
+           ondragleave="this.classList.remove('dragover')"
+           style="margin-bottom:12px;">
+        <i class="bi bi-person-lines-fill drop-icon" style="font-size:22px;color:var(--blue);"></i>
+        <div class="drop-label" style="font-size:12px;">Upload Instructions/Contacts screenshot</div>
+        <div class="drop-hint">Safeguard "Instructions!" tab · extracts names &amp; phones</div>
+        <input type="file" id="contactsInput" accept="image/*" style="display:none" />
+      </div>
+
+      <div id="contactsOcrBox" style="display:none;" class="ocr-box info">
+        <div class="ocr-row"><span class="spin"></span><span>Extracting contact info…</span></div>
+        <div class="ocr-bar-wrap"><div class="ocr-bar-fill" id="contactsBar" style="width:0%"></div></div>
+      </div>
+
+      <!-- Policy Holder -->
+      <div class="contact-block">
+        <div class="contact-block-title ph"><i class="bi bi-person-fill"></i>Policy Holder</div>
+        <div class="fields-grid">
+          <div class="field-group" style="margin-bottom:0;">
+            <label class="field-label" for="phName">Name</label>
+            <input type="text" id="phName" class="field-input" placeholder="LUPSY WALLACE" />
+          </div>
+          <div class="field-group" style="margin-bottom:0;">
+            <label class="field-label" for="phPhone">Phone</label>
+            <input type="tel" id="phPhone" class="field-input" placeholder="(302) 335-4848" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent -->
+      <div class="contact-block">
+        <div class="contact-block-title ag"><i class="bi bi-briefcase-fill"></i>Agent</div>
+        <div class="fields-grid">
+          <div class="field-group" style="margin-bottom:0;">
+            <label class="field-label" for="agentName">Name</label>
+            <input type="text" id="agentName" class="field-input" placeholder="Hunter Jacob Emory" />
+          </div>
+          <div class="field-group" style="margin-bottom:0;">
+            <label class="field-label" for="agentPhone">Phone</label>
+            <input type="tel" id="agentPhone" class="field-input" placeholder="(302) 424-9999" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Insurance carrier -->
+      <div class="field-group">
+        <label class="field-label" for="fieldCarrier">Insurance Carrier</label>
+        <input type="text" id="fieldCarrier" class="field-input" placeholder="State Farm" />
+      </div>
+
+      <!-- Bland dispatch panel — shown after report is saved -->
+      <div class="bland-panel" id="blandPanel" style="display:none;">
+        <div class="bland-header">
+          <span class="bland-logo">BLAND</span>
+          <span class="bland-title">Auto-Call Dispatch</span>
+          <i class="bi bi-telephone-outbound" style="color:var(--blue-bright);"></i>
+        </div>
+        <div class="bland-body">
+          <div id="callTargets"></div>
+          <button id="dispatchBtn" class="btn-dispatch" onclick="dispatchCalls()">
+            <i class="bi bi-telephone-outbound-fill"></i>
+            Call Both Simultaneously
+          </button>
+          <div id="callStatusBox" style="display:none;"></div>
+          <p class="step5-skip">Calls will be placed using Bland.ai AI voice. Both contacts are called at the same time.</p>
+
+          <!-- Call screenshot upload -->
+          <div class="call-screenshot-zone">
+            <div class="call-screenshot-label">
+              <i class="bi bi-phone"></i>Attach Call Screenshot (evidence)
+            </div>
+            <div id="callShotDrop" class="drop-zone drop-zone-sm"
+                 onclick="document.getElementById('callShotInput').click()"
+                 ondragover="handleDragOver(event)"
+                 ondrop="handleDrop(event,'callshot')"
+                 ondragleave="this.classList.remove('dragover')">
+              <i class="bi bi-image drop-icon" style="font-size:20px;"></i>
+              <div class="drop-label" style="font-size:12px;">Upload screenshot of phone call log</div>
+              <div class="drop-hint">Shows number dialed, duration &amp; timestamp</div>
+              <input type="file" id="callShotInput" accept="image/*" style="display:none" />
+            </div>
+            <div id="callShotPreview" style="display:none;">
+              <div class="preview-wrap">
+                <img id="callShotImg" class="preview-img" />
+                <div class="preview-footer">
+                  <span class="preview-name" id="callShotName">–</span>
+                  <button class="btn-remove" onclick="clearCallShot()"><i class="bi bi-x-circle"></i> Remove</button>
+                </div>
+              </div>
+              <div id="callShotUploadStatus" style="margin-top:6px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="step5-skip" id="step5Hint" style="margin-top:10px;">
+        Submit the report first (Step 6), then the call panel will unlock.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── SUBMIT ────────────────────────────────────────────── -->
+  <button id="submitBtn" class="btn-submit" onclick="submitReport()">
+    <i class="bi bi-send-fill"></i>Submit Report
+  </button>
+
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────
+let screenshotFile = null, justFile = null, callShotFile = null;
+let ocrTimer = null, contactsTimer = null;
+let savedReportId = null;
+
+const FIELD_MAP = {
+  address:      'fieldAddress',
+  work_code:    'fieldWorkCode',
+  client:       'fieldClient',
+  due_date:     'fieldDueDate',
+  lockbox_code: 'fieldLockbox',
+  name:         'fieldName',
+  order_number: 'fieldOrderNum',
+};
+
+// ── Drag & Drop ───────────────────────────────────────────────
+function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
+function handleDrop(e, target) {
+  e.preventDefault(); e.currentTarget.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  ({ screenshot: handleScreenshot, just: handleJust, contacts: handleContacts, callshot: handleCallShot })[target]?.(file);
+}
+
+// ── Screenshot ────────────────────────────────────────────────
+document.getElementById('screenshotInput').addEventListener('change', function() { if (this.files[0]) handleScreenshot(this.files[0]); });
+function handleScreenshot(file) {
+  screenshotFile = file;
+  readAsUrl(file, url => {
+    document.getElementById('previewImg').src = url;
+    document.getElementById('previewName').textContent = file.name;
+    document.getElementById('dropZone').style.display = 'none';
+    document.getElementById('previewArea').style.display = 'block';
+    runOCR(file);
+  });
+}
+function clearScreenshot() {
+  screenshotFile = null;
+  document.getElementById('screenshotInput').value = '';
+  document.getElementById('dropZone').style.display = 'flex';
+  document.getElementById('previewArea').style.display = 'none';
+  clearAutoFill();
+}
+
+// ── Justification ─────────────────────────────────────────────
+document.getElementById('justInput').addEventListener('change', function() { if (this.files[0]) handleJust(this.files[0]); });
+function handleJust(file) {
+  justFile = file;
+  readAsUrl(file, url => {
+    document.getElementById('justPreviewImg').src = url;
+    document.getElementById('justPreviewName').textContent = file.name;
+    document.getElementById('justDropZone').style.display = 'none';
+    document.getElementById('justPreviewArea').style.display = 'block';
+  });
+}
+function clearJust() {
+  justFile = null;
+  document.getElementById('justInput').value = '';
+  document.getElementById('justDropZone').style.display = 'flex';
+  document.getElementById('justPreviewArea').style.display = 'none';
+}
+
+// ── Contacts screenshot ───────────────────────────────────────
+document.getElementById('contactsInput').addEventListener('change', function() { if (this.files[0]) handleContacts(this.files[0]); });
+function handleContacts(file) {
+  const box = document.getElementById('contactsOcrBox');
+  box.style.display = 'block';
+  box.className = 'ocr-box info';
+  box.innerHTML = `<div class="ocr-row"><span class="spin"></span><span>Sending to OCR engine…</span></div>
+    <div class="ocr-bar-wrap"><div class="ocr-bar-fill" id="contactsBar" style="width:5%"></div></div>`;
+
+  startContactsTicker(10, 80, 60_000);
+
+  const fd = new FormData();
+  fd.append('image', file);
+
+  const ctrl = new AbortController();
+  const tout = setTimeout(() => ctrl.abort(), 90_000);
+
+  fetch('/api/ocr/contacts', { method: 'POST', body: fd, signal: ctrl.signal })
+    .then(r => { clearTimeout(tout); stopContactsTicker(); return r.json().then(j => ({ ok: r.ok, j })); })
+    .then(({ ok, j }) => {
+      if (!ok) throw new Error(j.error || 'OCR failed');
+      const ct = j.contacts || {};
+      let filled = 0;
+      if (ct.policy_holder_name)  { document.getElementById('phName').value    = ct.policy_holder_name;  document.getElementById('phName').classList.add('autofilled');    filled++; }
+      if (ct.policy_holder_phone) { document.getElementById('phPhone').value   = ct.policy_holder_phone; document.getElementById('phPhone').classList.add('autofilled');   filled++; }
+      if (ct.agent_name)          { document.getElementById('agentName').value = ct.agent_name;          document.getElementById('agentName').classList.add('autofilled'); filled++; }
+      if (ct.agent_phone)         { document.getElementById('agentPhone').value = ct.agent_phone;        document.getElementById('agentPhone').classList.add('autofilled');filled++; }
+      if (ct.insurance_carrier)   { document.getElementById('fieldCarrier').value = ct.insurance_carrier; filled++; }
+
+      if (filled >= 3) {
+        box.className = 'ocr-box success';
+        box.innerHTML = `<div class="ocr-row"><i class="bi bi-check-circle-fill" style="color:var(--green)"></i>
+          <span><strong>${filled} fields extracted.</strong> Review and correct if needed.</span></div>`;
+      } else if (filled > 0) {
+        box.className = 'ocr-box warn';
+        box.innerHTML = `<div class="ocr-row"><i class="bi bi-exclamation-circle-fill" style="color:var(--accent)"></i>
+          <span><strong>${filled} field(s) found.</strong> Fill the rest manually.</span></div>
+          <button style="margin-top:6px;padding:4px 10px;background:transparent;border:1px solid currentColor;border-radius:4px;font-size:11px;cursor:pointer;" onclick="document.getElementById('contactsInput').click()">
+          <i class="bi bi-arrow-repeat"></i> Try another image</button>`;
+      } else {
+        box.className = 'ocr-box error';
+        box.innerHTML = `<div class="ocr-row"><i class="bi bi-x-circle-fill" style="color:var(--red)"></i>
+          <span><strong>Could not extract contacts.</strong> Make sure the Instructions tab is visible.</span></div>
+          <button style="margin-top:6px;padding:4px 10px;background:transparent;border:1px solid currentColor;border-radius:4px;font-size:11px;cursor:pointer;" onclick="document.getElementById('contactsInput').click()">
+          <i class="bi bi-arrow-repeat"></i> Try another image</button>`;
+      }
+    })
+    .catch(e => {
+      clearTimeout(tout); stopContactsTicker();
+      box.className = 'ocr-box error';
+      box.innerHTML = `<div class="ocr-row"><i class="bi bi-wifi-off" style="color:var(--red)"></i>
+        <span><strong>Error:</strong> ${e.message}. Fill fields manually.</span></div>`;
+    });
+}
+
+function startContactsTicker(from, to, ms) {
+  clearInterval(contactsTimer);
+  let pct = from;
+  const step = (to - from) / (ms / 400);
+  contactsTimer = setInterval(() => {
+    pct = Math.min(to, pct + step);
+    const bar = document.getElementById('contactsBar');
+    if (bar) bar.style.width = Math.round(pct) + '%';
+  }, 400);
+}
+function stopContactsTicker() { clearInterval(contactsTimer); contactsTimer = null; }
+
+// ── Call screenshot ───────────────────────────────────────────
+document.getElementById('callShotInput').addEventListener('change', function() { if (this.files[0]) handleCallShot(this.files[0]); });
+function handleCallShot(file) {
+  callShotFile = file;
+  readAsUrl(file, url => {
+    document.getElementById('callShotImg').src = url;
+    document.getElementById('callShotName').textContent = file.name;
+    document.getElementById('callShotDrop').style.display = 'none';
+    document.getElementById('callShotPreview').style.display = 'block';
+    if (savedReportId) uploadCallScreenshot(file);
+  });
+}
+function clearCallShot() {
+  callShotFile = null;
+  document.getElementById('callShotInput').value = '';
+  document.getElementById('callShotDrop').style.display = 'flex';
+  document.getElementById('callShotPreview').style.display = 'none';
+}
+
+async function uploadCallScreenshot(file) {
+  const statusEl = document.getElementById('callShotUploadStatus');
+  statusEl.innerHTML = `<div class="ocr-row" style="font-size:12px;"><span class="spin"></span><span>Uploading…</span></div>`;
+  const fd = new FormData();
+  fd.append('call_screenshot', file);
+  try {
+    const resp = await fetch(`/api/reports/${savedReportId}/call-screenshot`, { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error);
+    statusEl.innerHTML = `<div style="font-size:11px;color:var(--green);font-weight:600;"><i class="bi bi-check-circle-fill"></i> Screenshot saved to report #${savedReportId}</div>`;
+  } catch (e) {
+    statusEl.innerHTML = `<div style="font-size:11px;color:var(--red);"><i class="bi bi-exclamation-triangle-fill"></i> Upload failed: ${e.message}</div>`;
+  }
+}
+
+// ── OCR for order fields ──────────────────────────────────────
+function setOcrBox(html, type = 'info') {
+  const el = document.getElementById('ocrBox');
+  el.className = `ocr-box ${type}`;
+  el.innerHTML = html;
+}
+function ocrProgress(pct, label) {
+  setOcrBox(`<div class="ocr-row"><span class="spin"></span><span>${label}</span></div>
+    <div class="ocr-bar-wrap"><div class="ocr-bar-fill" style="width:${pct}%"></div></div>`);
+}
+function startTicker(from, to, ms, label) {
+  clearInterval(ocrTimer);
+  let pct = from;
+  const step = (to - from) / (ms / 400);
+  ocrTimer = setInterval(() => { pct = Math.min(to, pct + step); ocrProgress(Math.round(pct), label); }, 400);
+}
+function stopTicker() { clearInterval(ocrTimer); ocrTimer = null; }
+function clearAutoFill() { Object.values(FIELD_MAP).forEach(id => { document.getElementById(id).value = ''; document.getElementById(id).classList.remove('autofilled'); }); }
+
+async function runOCR(file) {
+  ocrProgress(5, 'Sending image…');
+  const fd = new FormData(); fd.append('image', file);
+  const ctrl = new AbortController();
+  const tout = setTimeout(() => ctrl.abort(), 90_000);
+  startTicker(12, 82, 65_000, 'Reading with OCR engine…');
+  try {
+    const resp = await fetch('/api/ocr', { method: 'POST', body: fd, signal: ctrl.signal });
+    clearTimeout(tout); stopTicker(); ocrProgress(95, 'Filling fields…');
+    const json = await resp.json();
+    if (!resp.ok) throw new Error(json.error || `Server error ${resp.status}`);
+
+    const fields = json.fields || {};
+    let count = 0;
+    for (const [key, elId] of Object.entries(FIELD_MAP)) {
+      if (fields[key]) { const el = document.getElementById(elId); el.value = fields[key]; el.classList.add('autofilled'); count++; }
+    }
+
+    if (count >= 4) {
+      setOcrBox(`<div class="ocr-row"><i class="bi bi-check-circle-fill" style="color:var(--green)"></i>
+        <span><strong>${count} fields auto-filled.</strong> Review and correct if needed.</span></div>`, 'success');
+    } else if (count > 0) {
+      setOcrBox(`<div class="ocr-row"><i class="bi bi-exclamation-circle-fill" style="color:var(--accent)"></i>
+        <span><strong>${count} field(s) detected.</strong> Fill the rest manually.</span></div>
+        <button style="margin-top:6px;padding:4px 10px;background:transparent;border:1px solid currentColor;border-radius:4px;font-size:11px;cursor:pointer;" onclick="document.getElementById('screenshotInput').click()">
+        <i class="bi bi-arrow-repeat"></i> Try another image</button>`, 'warn');
+    } else {
+      setOcrBox(`<div class="ocr-row"><i class="bi bi-x-circle-fill" style="color:var(--red)"></i>
+        <span><strong>Could not read data.</strong> Make sure the Details tab is visible.</span></div>
+        <button style="margin-top:6px;padding:4px 10px;background:transparent;border:1px solid currentColor;border-radius:4px;font-size:11px;cursor:pointer;" onclick="document.getElementById('screenshotInput').click()">
+        <i class="bi bi-arrow-repeat"></i> Try another image</button>`, 'error');
+    }
+  } catch (e) {
+    clearTimeout(tout); stopTicker();
+    const isTimeout = e.name === 'AbortError';
+    setOcrBox(`<div class="ocr-row"><i class="bi bi-${isTimeout ? 'clock-history' : 'wifi-off'}" style="color:${isTimeout ? 'var(--accent)' : 'var(--red)'}"></i>
+      <span><strong>${isTimeout ? 'Timed out.' : 'Cannot reach server.'}</strong> Fill fields manually.</span></div>
+      <button style="margin-top:6px;padding:4px 10px;background:transparent;border:1px solid currentColor;border-radius:4px;font-size:11px;cursor:pointer;" onclick="runOCR(screenshotFile)">
+      <i class="bi bi-arrow-repeat"></i> Retry</button>`, isTimeout ? 'warn' : 'error');
+  }
+}
+
+// ── Reason cards ──────────────────────────────────────────────
+document.querySelectorAll('.reason-radio').forEach(radio => {
+  radio.addEventListener('change', function() {
+    document.querySelectorAll('.reason-card').forEach(c => c.classList.remove('selected'));
+    if (this.checked) document.getElementById('card_' + this.value).classList.add('selected');
+  });
+});
+
+// ── Submit ────────────────────────────────────────────────────
+async function submitReport() {
+  const inspector = document.getElementById('inspectorName').value.trim();
+  const address   = document.getElementById('fieldAddress').value.trim();
+  const reason    = document.querySelector('input[name="reason"]:checked')?.value;
+  if (!inspector) { toast('Please enter your name.', 'error'); return; }
+  if (!address)   { toast('Address is required.', 'error'); return; }
+  if (!reason)    { toast('Select a reason for non-completion.', 'error'); return; }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin" style="border-top-color:#fff;border-color:rgba(255,255,255,0.2)"></span> Submitting…';
+
+  const fd = new FormData();
+  fd.append('inspector_name',      inspector);
+  fd.append('address',             address);
+  fd.append('work_code',           document.getElementById('fieldWorkCode').value.trim());
+  fd.append('client',              document.getElementById('fieldClient').value.trim());
+  fd.append('due_date',            document.getElementById('fieldDueDate').value.trim());
+  fd.append('lockbox_code',        document.getElementById('fieldLockbox').value.trim());
+  fd.append('property_name',       document.getElementById('fieldName').value.trim());
+  fd.append('order_number',        document.getElementById('fieldOrderNum').value.trim());
+  fd.append('reason',              reason);
+  fd.append('notes',               document.getElementById('fieldNotes').value.trim());
+  fd.append('policy_holder_name',  document.getElementById('phName').value.trim());
+  fd.append('policy_holder_phone', document.getElementById('phPhone').value.trim());
+  fd.append('agent_name',          document.getElementById('agentName').value.trim());
+  fd.append('agent_phone',         document.getElementById('agentPhone').value.trim());
+  fd.append('insurance_carrier',   document.getElementById('fieldCarrier').value.trim());
+  if (screenshotFile) fd.append('order_screenshot',    screenshotFile);
+  if (justFile)       fd.append('justification_photo', justFile);
+  if (callShotFile)   fd.append('call_screenshot',     callShotFile);
+
+  try {
+    const resp = await fetch('/api/submit', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Server error');
+    savedReportId = data.id;
+    toast(`Report #${data.id} saved ✓`, 'success');
+    unlockBlandPanel();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send-fill"></i>Submit Report';
+  }
+}
+
+function unlockBlandPanel() {
+  document.getElementById('step5Hint').style.display = 'none';
+  const panel = document.getElementById('blandPanel');
+  panel.style.display = 'block';
+
+  const phName  = document.getElementById('phName').value.trim();
+  const phPhone = document.getElementById('phPhone').value.trim();
+  const agName  = document.getElementById('agentName').value.trim();
+  const agPhone = document.getElementById('agentPhone').value.trim();
+
+  const targets = [];
+  if (phPhone) targets.push({ name: phName || 'Policy Holder', phone: phPhone, type: 'ph' });
+  if (agPhone) targets.push({ name: agName || 'Agent', phone: agPhone, type: 'ag' });
+
+  const el = document.getElementById('callTargets');
+  if (!targets.length) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--gray-400);padding:8px 0;">No phone numbers filled in Step 5. Add them and re-submit, or fill above and dispatch.</div>`;
+  } else {
+    el.innerHTML = targets.map(t => `
+      <div class="call-target">
+        <i class="bi bi-person-circle call-target-icon ${t.type}"></i>
+        <div class="call-target-info">
+          <div class="call-target-name">${esc(t.name)}</div>
+          <div class="call-target-phone">${esc(t.phone)}</div>
+        </div>
+        <div class="call-target-status">
+          <span class="pill pill-calling" id="pill_${t.type}"><i class="bi bi-clock"></i> Ready</span>
+        </div>
+      </div>`).join('');
+  }
+
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ── Bland dispatch ────────────────────────────────────────────
+async function dispatchCalls() {
+  if (!savedReportId) { toast('Submit the report first.', 'error'); return; }
+
+  const phPhone = document.getElementById('phPhone').value.trim();
+  const agPhone = document.getElementById('agentPhone').value.trim();
+  if (!phPhone && !agPhone) { toast('Add at least one phone number.', 'error'); return; }
+
+  const btn = document.getElementById('dispatchBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin" style="border-top-color:#fff;border-color:rgba(255,255,255,0.2)"></span> Calling…';
+
+  const statusBox = document.getElementById('callStatusBox');
+  statusBox.style.display = 'block';
+  statusBox.className = 'call-status-row calling';
+  statusBox.innerHTML = `<span class="spin"></span><span>Dispatching calls via Bland.ai…</span>`;
+
+  // Update pills to "calling"
+  ['ph','ag'].forEach(t => {
+    const p = document.getElementById('pill_' + t);
+    if (p) { p.className = 'pill pill-calling'; p.innerHTML = '<i class="bi bi-telephone-fill"></i> Calling…'; }
+  });
+
+  try {
+    const resp = await fetch('/api/bland/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        report_id:           savedReportId,
+        policy_holder_name:  document.getElementById('phName').value.trim(),
+        policy_holder_phone: phPhone,
+        agent_name:          document.getElementById('agentName').value.trim(),
+        agent_phone:         agPhone,
+        insurance_carrier:   document.getElementById('fieldCarrier').value.trim(),
+      })
+    });
+    const data = await resp.json();
+
+    if (!resp.ok || !data.success) {
+      const errMsg = data.errors?.map(e => `${e.type}: ${e.error}`).join('; ') || data.error || 'Dispatch failed';
+      throw new Error(errMsg);
+    }
+
+    statusBox.className = 'call-status-row success';
+    statusBox.innerHTML = `<i class="bi bi-check-circle-fill" style="color:var(--green)"></i>
+      <span><strong>${data.dispatched} call(s) dispatched.</strong> 
+      ${data.errors?.length ? `${data.errors.length} error(s): ${data.errors.map(e=>e.type).join(', ')}` : 'Bland.ai is calling both contacts now.'}
+      Webhook will update status automatically.</span>`;
+
+    btn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Calls Dispatched';
+
+    toast(`${data.dispatched} call(s) dispatched via Bland.ai ✓`, 'success');
+
+    // Update pills
+    data.calls?.forEach(c => {
+      const t = c.type === 'policy_holder' ? 'ph' : 'ag';
+      const p = document.getElementById('pill_' + t);
+      if (p) { p.className = 'pill pill-calling'; p.innerHTML = '<i class="bi bi-telephone-fill"></i> In Call'; }
+    });
+
+    if (data.errors?.length) {
+      data.errors.forEach(e => {
+        const t = e.type === 'policy_holder' ? 'ph' : 'ag';
+        const p = document.getElementById('pill_' + t);
+        if (p) { p.className = 'pill pill-error'; p.innerHTML = '<i class="bi bi-x-circle-fill"></i> Error'; }
+      });
+    }
+
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-telephone-outbound-fill"></i> Call Both Simultaneously';
+    statusBox.className = 'call-status-row error';
+    statusBox.innerHTML = `<i class="bi bi-exclamation-triangle-fill" style="color:var(--red)"></i>
+      <span><strong>Error:</strong> ${e.message}</span>`;
+    toast(e.message, 'error');
+  }
+}
+
+// ── Utilities ─────────────────────────────────────────────────
+function readAsUrl(file, cb) {
+  const r = new FileReader(); r.onload = e => cb(e.target.result); r.readAsDataURL(file);
+}
+
+function resetForm() {
+  screenshotFile = null; justFile = null; callShotFile = null; savedReportId = null;
+  clearScreenshot(); clearJust(); clearCallShot();
+  ['fieldAddress','fieldWorkCode','fieldClient','fieldDueDate','fieldLockbox','fieldName','fieldOrderNum',
+   'fieldNotes','phName','phPhone','agentName','agentPhone','fieldCarrier'].forEach(id => {
+    document.getElementById(id).value = '';
+    document.getElementById(id).classList.remove('autofilled');
+  });
+  document.querySelectorAll('.reason-radio').forEach(r => r.checked = false);
+  document.querySelectorAll('.reason-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('blandPanel').style.display = 'none';
+  document.getElementById('step5Hint').style.display = 'block';
+  document.getElementById('contactsOcrBox').style.display = 'none';
+  document.getElementById('submitBtn').innerHTML = '<i class="bi bi-send-fill"></i>Submit Report';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toast(msg, type = 'success') {
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  el.className = `toast-msg toast-${type}`;
+  el.innerHTML = `${type === 'success'
+    ? '<i class="bi bi-check-circle-fill" style="color:var(--green)"></i>'
+    : '<i class="bi bi-exclamation-triangle-fill" style="color:var(--red)"></i>'
+  }<span>${msg}</span>`;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+function esc(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
