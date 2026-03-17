@@ -424,54 +424,10 @@
         <input type="text" id="fieldCarrier" class="field-input" placeholder="State Farm" />
       </div>
 
-      <!-- Bland dispatch panel — shown after report is saved -->
-      <div class="bland-panel" id="blandPanel" style="display:none;">
-        <div class="bland-header">
-          <span class="bland-logo">BLAND</span>
-          <span class="bland-title">Auto-Call Dispatch</span>
-          <i class="bi bi-telephone-outbound" style="color:var(--blue-bright);"></i>
-        </div>
-        <div class="bland-body">
-          <div id="callTargets"></div>
-          <button id="dispatchBtn" class="btn-dispatch" onclick="dispatchCalls()">
-            <i class="bi bi-telephone-outbound-fill"></i>
-            Call Both Simultaneously
-          </button>
-          <div id="callStatusBox" style="display:none;"></div>
-          <p class="step5-skip">Calls will be placed using Bland.ai AI voice. Both contacts are called at the same time.</p>
-
-          <!-- Call screenshot upload -->
-          <div class="call-screenshot-zone">
-            <div class="call-screenshot-label">
-              <i class="bi bi-phone"></i>Attach Call Screenshot (evidence)
-            </div>
-            <div id="callShotDrop" class="drop-zone drop-zone-sm"
-                 onclick="document.getElementById('callShotInput').click()"
-                 ondragover="handleDragOver(event)"
-                 ondrop="handleDrop(event,'callshot')"
-                 ondragleave="this.classList.remove('dragover')">
-              <i class="bi bi-image drop-icon" style="font-size:20px;"></i>
-              <div class="drop-label" style="font-size:12px;">Upload screenshot of phone call log</div>
-              <div class="drop-hint">Shows number dialed, duration &amp; timestamp</div>
-              <input type="file" id="callShotInput" accept="image/*" style="display:none" />
-            </div>
-            <div id="callShotPreview" style="display:none;">
-              <div class="preview-wrap">
-                <img id="callShotImg" class="preview-img" />
-                <div class="preview-footer">
-                  <span class="preview-name" id="callShotName">–</span>
-                  <button class="btn-remove" onclick="clearCallShot()"><i class="bi bi-x-circle"></i> Remove</button>
-                </div>
-              </div>
-              <div id="callShotUploadStatus" style="margin-top:6px;"></div>
-            </div>
-          </div>
-        </div>
+      <!-- Call dispatch result — shown after auto-dispatch -->
+      <div id="blandPanel" style="display:none;">
+        <div id="callStatusBox" style="display:none;"></div>
       </div>
-
-      <p class="step5-skip" id="step5Hint" style="margin-top:10px;">
-        Submit the report first (Step 6), then the call panel will unlock.
-      </p>
     </div>
   </div>
 
@@ -486,7 +442,7 @@
 
 <script>
 // ── State ─────────────────────────────────────────────────────
-let screenshotFile = null, justFile = null, callShotFile = null;
+let screenshotFile = null, justFile = null;
 let ocrTimer = null, contactsTimer = null;
 let savedReportId = null;
 
@@ -633,40 +589,6 @@ function startContactsTicker(from, to, ms) {
 }
 function stopContactsTicker() { clearInterval(contactsTimer); contactsTimer = null; }
 
-// ── Call screenshot ───────────────────────────────────────────
-document.getElementById('callShotInput').addEventListener('change', function() { if (this.files[0]) handleCallShot(this.files[0]); });
-function handleCallShot(file) {
-  callShotFile = file;
-  readAsUrl(file, url => {
-    document.getElementById('callShotImg').src = url;
-    document.getElementById('callShotName').textContent = file.name;
-    document.getElementById('callShotDrop').style.display = 'none';
-    document.getElementById('callShotPreview').style.display = 'block';
-    if (savedReportId) uploadCallScreenshot(file);
-  });
-}
-function clearCallShot() {
-  callShotFile = null;
-  document.getElementById('callShotInput').value = '';
-  document.getElementById('callShotDrop').style.display = 'flex';
-  document.getElementById('callShotPreview').style.display = 'none';
-}
-
-async function uploadCallScreenshot(file) {
-  const statusEl = document.getElementById('callShotUploadStatus');
-  statusEl.innerHTML = `<div class="ocr-row" style="font-size:12px;"><span class="spin"></span><span>Uploading…</span></div>`;
-  const fd = new FormData();
-  fd.append('call_screenshot', file);
-  try {
-    const resp = await fetch(`/api/reports/${savedReportId}/call-screenshot`, { method: 'POST', body: fd });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error);
-    statusEl.innerHTML = `<div style="font-size:11px;color:var(--green);font-weight:600;"><i class="bi bi-check-circle-fill"></i> Screenshot saved to report #${savedReportId}</div>`;
-  } catch (e) {
-    statusEl.innerHTML = `<div style="font-size:11px;color:var(--red);"><i class="bi bi-exclamation-triangle-fill"></i> Upload failed: ${e.message}</div>`;
-  }
-}
-
 // ── OCR for order fields ──────────────────────────────────────
 function setOcrBox(html, type = 'info') {
   const el = document.getElementById('ocrBox');
@@ -767,15 +689,14 @@ async function submitReport() {
   fd.append('insurance_carrier',   document.getElementById('fieldCarrier').value.trim());
   if (screenshotFile) fd.append('order_screenshot',    screenshotFile);
   if (justFile)       fd.append('justification_photo', justFile);
-  if (callShotFile)   fd.append('call_screenshot',     callShotFile);
 
   try {
     const resp = await fetch('/api/submit', { method: 'POST', body: fd });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'Server error');
     savedReportId = data.id;
-    showSubmitSuccess(data.id);
-    unlockBlandPanel();
+    // Auto-dispatch calls immediately
+    autoDispatch(data.id);
   } catch (e) {
     toast(e.message, 'error');
   } finally {
@@ -784,49 +705,69 @@ async function submitReport() {
   }
 }
 
-function showSubmitSuccess(id) {
+async function autoDispatch(id) {
+  const phPhone = document.getElementById('phPhone').value.trim();
+  const agPhone = document.getElementById('agentPhone').value.trim();
+
+  if (!phPhone && !agPhone) {
+    showSubmitSuccess(id, 0, false);
+    return;
+  }
+
+  try {
+    const resp = await fetch('/api/bland/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        report_id:           id,
+        policy_holder_name:  document.getElementById('phName').value.trim(),
+        policy_holder_phone: phPhone,
+        agent_name:          document.getElementById('agentName').value.trim(),
+        agent_phone:         agPhone,
+        insurance_carrier:   document.getElementById('fieldCarrier').value.trim(),
+      })
+    });
+    const data = await resp.json();
+    showSubmitSuccess(id, data.dispatched || 0, true);
+  } catch(e) {
+    showSubmitSuccess(id, 0, false);
+  }
+}
+
+function showSubmitSuccess(id, dispatched, callsOk) {
   const btn = document.getElementById('submitBtn');
   btn.disabled = false;
   btn.innerHTML = '<i class="bi bi-send-fill"></i>Submit Report';
 
-  // Show big success banner
   const existing = document.getElementById('successBanner');
   if (existing) existing.remove();
 
   const banner = document.createElement('div');
   banner.id = 'successBanner';
-  banner.style.cssText = `
-    background: linear-gradient(135deg, #0d3d1f, #0f5c2e);
-    border: 1.5px solid var(--green);
-    border-radius: var(--radius-lg);
-    padding: 20px 18px;
-    margin-bottom: 14px;
-    display: flex;
-    gap: 14px;
-    align-items: flex-start;
-    animation: fadeIn .4s ease;
-  `;
+  banner.style.cssText = 'background:linear-gradient(135deg,#0d3d1f,#0f5c2e);border:1.5px solid var(--green);border-radius:var(--radius-lg);padding:20px 18px;margin-bottom:14px;display:flex;gap:14px;align-items:flex-start;animation:fadeIn .4s ease;';
+
+  const callLine = callsOk && dispatched > 0
+    ? `Anna is now calling both contacts — the system is handling everything.`
+    : `Report saved. Add phone numbers and the system will place the calls.`;
+
   banner.innerHTML = `
-    <div style="width:46px;height:46px;background:rgba(31,186,116,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-      <i class="bi bi-check-circle-fill" style="font-size:24px;color:var(--green)"></i>
+    <div style="width:50px;height:50px;background:rgba(31,186,116,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+      <i class="bi bi-${callsOk ? 'telephone-fill' : 'check-circle-fill'}" style="font-size:24px;color:var(--green)"></i>
     </div>
     <div style="flex:1">
-      <div style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:600;letter-spacing:.06em;margin-bottom:4px;">REPORT #${id} SUBMITTED</div>
-      <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">You're all set — move to the next property!</div>
-      <div style="font-size:13px;color:rgba(255,255,255,.7);line-height:1.5;">
-        Your report has been saved successfully. The system is now handling the follow-up calls automatically.<br>
-        <strong style="color:rgba(255,255,255,.9);">You can leave the property and head to your next stop.</strong>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:600;letter-spacing:.06em;margin-bottom:5px;">REPORT #${id} SUBMITTED</div>
+      <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:7px;">You're all set — head to the next property!</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.75);line-height:1.6;">
+        ${callLine}<br>
+        <strong style="color:#fff;">You can leave now. The system will take care of the rest.</strong>
       </div>
     </div>
   `;
 
-  // Insert banner before submit button
   const submitBtn = document.getElementById('submitBtn');
   submitBtn.parentNode.insertBefore(banner, submitBtn);
   banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-  // Also show toast
-  toast(`Report #${id} saved ✓ — Head to next property!`, 'success');
+  toast('Report submitted ✓ — Head to next property!', 'success');
 }
 
 function unlockBlandPanel() {
@@ -914,27 +855,7 @@ async function dispatchCalls() {
 
     btn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Calls Dispatched';
 
-    // Show big call success banner
-    const existing = document.getElementById('callSuccessBanner');
-    if (existing) existing.remove();
-    const banner = document.createElement('div');
-    banner.id = 'callSuccessBanner';
-    banner.style.cssText = 'background:linear-gradient(135deg,#0d3d1f,#0f5c2e);border:1.5px solid var(--green);border-radius:var(--radius-lg);padding:20px 18px;margin-top:14px;display:flex;gap:14px;align-items:flex-start;animation:fadeIn .4s ease;';
-    banner.innerHTML = `
-      <div style="width:46px;height:46px;background:rgba(31,186,116,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-        <i class="bi bi-telephone-fill" style="font-size:22px;color:var(--green)"></i>
-      </div>
-      <div style="flex:1">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:600;letter-spacing:.06em;margin-bottom:4px;">${data.dispatched} CALL(S) DISPATCHED</div>
-        <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">Anna is on it — you're free to go!</div>
-        <div style="font-size:13px;color:rgba(255,255,255,.7);line-height:1.5;">
-          The calls have been placed to both contacts.<br>
-          <strong style="color:rgba(255,255,255,.9);">You can leave the property now and head to your next stop. The system will handle the rest.</strong>
-        </div>
-      </div>
-    `;
-    statusBox.parentNode.insertBefore(banner, statusBox.nextSibling);
-    banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
 
     // Update pills
     data.calls?.forEach(c => {
@@ -967,9 +888,8 @@ function readAsUrl(file, cb) {
 }
 
 function resetForm() {
-  screenshotFile = null; justFile = null; callShotFile = null; savedReportId = null;
+  screenshotFile = null; justFile = null; savedReportId = null;
   const sb = document.getElementById('successBanner'); if (sb) sb.remove();
-  const cb = document.getElementById('callSuccessBanner'); if (cb) cb.remove();
   clearScreenshot(); clearJust(); clearCallShot();
   ['fieldAddress','fieldWorkCode','fieldClient','fieldDueDate','fieldLockbox','fieldName','fieldOrderNum',
    'fieldNotes','phName','phPhone','agentName','agentPhone','fieldCarrier'].forEach(id => {
