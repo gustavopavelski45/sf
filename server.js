@@ -15,7 +15,7 @@ const https   = require('https');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-const OCR_API_KEY   = process.env.OCR_API_KEY   || 'K85989969588957';
+const OCR_API_KEY   = process.env.OCR_API_KEY   || 'helloworld';
 const BLAND_API_KEY = process.env.BLAND_API_KEY  || '';
 const APP_BASE_URL  = process.env.APP_BASE_URL   || `http://localhost:${process.env.PORT || 3000}`;
 
@@ -265,21 +265,90 @@ function blandCall({ phone, contactType, contactName, report }) {
     const roleLabel  = contactType === 'policy_holder' ? 'property owner / policyholder' : 'listing agent';
     const name       = contactName || `the ${roleLabel}`;
 
-    const task = `
-You are a professional scheduler calling on behalf of JBA Property Solutions, working for ${carrier}.
+    const isAgent  = contactType === 'agent';
+    const reason   = report.reason || '';
 
-You are calling ${name} (the ${roleLabel}) about the property at ${address}, order number ${orderNum}.
+    // ── Situação-específica ───────────────────────────────────────
+    const situationMap = {
+      asked_to_leave: {
+        agentScript: 'Our inspector arrived on site but was asked to leave and could not complete the visit. Could you please assist by contacting the client and advising that we need permission to return and complete the survey?',
+        phScript:    'Our inspector was on site today but was unable to complete the visit because access permission was not granted. We would like to request permission to return and complete the survey. The visit is exterior only and usually takes just a few minutes.',
+      },
+      gated: {
+        agentScript: 'Our inspector arrived on site but could not access the property because it is gated. Could you please assist by contacting the client to provide the gate code or arrange access so the survey can be completed?',
+        phScript:    'Our inspector was on site today but could not access the property because the entrance is gated. Could you please provide the gate code or let us know a good date and time when access can be arranged? The survey is exterior only and takes just a few minutes.',
+      },
+      dog: {
+        agentScript: 'Our inspector arrived on site but could not safely complete the survey because there was a dog loose in the yard. Could you please assist by contacting the client so the dog can be secured and the survey can be completed?',
+        phScript:    'Our inspector was on site today but could not safely complete the survey because there was a dog in the yard. Could you please secure the dog and let us know a good time for us to return? The survey is exterior only and takes only a few minutes.',
+      },
+      bad_address: {
+        agentScript: 'Our inspector attempted to locate the property today, but the address provided appears to be incorrect or could not be confirmed on site. Could you please help verify the correct address so we can complete the survey?',
+        phScript:    'Our inspector attempted to visit today, but we were unable to confirm the correct address. Could you please verify the full property address or provide any helpful location details so we can complete the survey?',
+      },
+      child: {
+        agentScript: 'Our inspector arrived on site, but only a child was present at the property. For safety and compliance reasons, we were unable to proceed. Could you please assist in coordinating a better time when an adult will be present?',
+        phScript:    'Our inspector visited today, but only a child was present at the property. For safety reasons, we need to return when an adult is available. Please let us know a convenient date and time. The survey is exterior only and takes just a few minutes.',
+      },
+    };
 
-SITUATION: Our field inspector could not complete the inspection today because ${reasonText}.
+    const defaultScripts = {
+      agentScript: 'Our inspector was unable to complete the survey today. Could you please assist by contacting the client so we can arrange to complete the survey?',
+      phScript:    'Our inspector was unable to complete the survey today. We would like to schedule a time to return. The survey is exterior only and takes just a few minutes.',
+    };
 
-YOUR GOALS in order:
+    const s = situationMap[reason] || defaultScripts;
+
+    const s = situationMap[reason] || {
+      situation: 'our field representative was unable to complete the survey today',
+      agentAsk:  'Could you please contact your client so we can schedule a time to complete the exterior survey?',
+      phAsk:     'We would like to schedule a time to return and complete the exterior survey.',
+      vmAgent:   'We were unable to complete the survey. Please contact your client so we can schedule a return visit.',
+      vmPh:      'We were unable to complete the exterior survey. Please call us back to reschedule.',
+    };
+
+    const task = isAgent ? `
+You are Anna, calling on behalf of JBA Property Solutions.
+
+Your opening line when someone answers: "Hello, this is an inspection update regarding the survey requested for the property at ${address}."
+
+Then deliver this message:
+"${s.agentScript}"
+
+If they have questions, answer professionally and briefly.
+If they confirm they will help, thank them and end the call politely.
+
+If voicemail, leave this message:
+"Hello, this is an inspection update regarding the survey requested for the property at ${address}, order number ${orderNum}. ${s.agentScript} Please call us back at your earliest convenience. Thank you and have a great day."
+
+STRICT RULES:
+- Always say SURVEY, never say inspection
+- Never mention Safeguard Properties
+- Be professional, warm and concise
+
+After the call, summarize the outcome clearly.
+    `.trim() : `
+You are Anna, calling on behalf of JBA Property Solutions.
+
+Your opening line when someone answers: "Hello, this is regarding the survey requested for your property at ${address}."
+
+Then deliver this message:
+"${s.phScript}"
+
+YOUR GOALS:
 1. Confirm you reached the right person.
-2. Try to get IMMEDIATE ACCESS — ask for gate codes, key location, or authorization to allow the inspector to return today.
-3. If immediate access is not possible, SCHEDULE a new appointment (Mon–Sat, 8 AM–5 PM). Get a specific date and time.
-4. If voicemail: leave a brief professional message with order number ${orderNum} and ask them to call back.
+2. Resolve the issue — get permission, gate code, confirmed address, or schedule a specific date and time (Mon–Sat, 8 AM–5 PM).
+3. Be helpful and answer any questions they have.
 
-TONE: Professional, calm, concise. Do not mention Safeguard Properties.
-After the call, summarize the outcome: access granted / appointment scheduled (include date+time) / voicemail left / no answer.
+If voicemail, leave this message:
+"Hello, this is regarding the survey requested for the property at ${address}, order number ${orderNum}. ${s.phScript} Please call us back at your earliest convenience. Thank you."
+
+STRICT RULES:
+- Always say SURVEY, never say inspection
+- Never mention Safeguard Properties
+- Be professional, warm and concise
+
+After the call, summarize the outcome: access granted / appointment scheduled (date+time) / voicemail left / no answer.
     `.trim();
 
     const body = JSON.stringify({
@@ -608,7 +677,7 @@ app.listen(PORT, () => {
   console.log('✅  JBA Field Inspector App v3');
   console.log(`   Inspector  →  http://localhost:${PORT}/`);
   console.log(`   Dashboard  →  http://localhost:${PORT}/dashboard.html`);
-  console.log(`   OCR        →  OCR.space ✅ configured (${OCR_API_KEY.slice(0,6)}...)`);
+  console.log(`   OCR        →  OCR.space (test key)`);
   console.log(`   Bland.ai   →  ${BLAND_API_KEY ? '✅ configured' : '⚠️  BLAND_API_KEY not set — add to env'}`);
   console.log(`   Webhook    →  POST ${APP_BASE_URL}/api/bland/webhook\n`);
 });

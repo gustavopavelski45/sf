@@ -192,7 +192,7 @@
            ondrop="handleDrop(event,'screenshot')"
            ondragleave="this.classList.remove('dragover')">
       <i class="bi bi-cloud-arrow-up-fill drop-icon"></i>
-      <div class="drop-label">Tap to select · photo or gallery</div>
+      <div class="drop-label">Tap to select or take photo</div>
       <div class="drop-hint">Details tab · JPG · PNG · HEIC · max 15 MB</div>
       <input
         type="file"
@@ -280,12 +280,6 @@
     </div>
     <div class="card-body">
       <div class="reason-grid">
-        <label class="reason-card" id="card_bad_address">
-          <input type="radio" name="reason" value="bad_address" class="reason-radio" />
-          <i class="bi bi-geo-alt-fill r-icon bad"></i>
-          <span class="r-label">Bad Address</span>
-          <span class="r-desc">Property not found / incorrect address</span>
-        </label>
         <label class="reason-card" id="card_asked_to_leave">
           <input type="radio" name="reason" value="asked_to_leave" class="reason-radio" />
           <i class="bi bi-person-x-fill r-icon leave"></i>
@@ -297,6 +291,24 @@
           <i class="bi bi-lock-fill r-icon gated"></i>
           <span class="r-label">Gated</span>
           <span class="r-desc">Access blocked by gate / fence</span>
+        </label>
+        <label class="reason-card" id="card_dog">
+          <input type="radio" name="reason" value="dog" class="reason-radio" />
+          <i class="bi bi-exclamation-triangle-fill r-icon dog"></i>
+          <span class="r-label">Dog in Yard</span>
+          <span class="r-desc">Aggressive dog blocking access</span>
+        </label>
+        <label class="reason-card" id="card_bad_address">
+          <input type="radio" name="reason" value="bad_address" class="reason-radio" />
+          <i class="bi bi-geo-alt-fill r-icon bad"></i>
+          <span class="r-label">Bad Address</span>
+          <span class="r-desc">Property not found / incorrect address</span>
+        </label>
+        <label class="reason-card" id="card_child">
+          <input type="radio" name="reason" value="child" class="reason-radio" />
+          <i class="bi bi-emoji-smile-fill r-icon child"></i>
+          <span class="r-label">Child in Property</span>
+          <span class="r-desc">Minor present, no adult supervision</span>
         </label>
       </div>
     </div>
@@ -317,7 +329,7 @@
            style="margin-bottom:12px;">
         <i class="bi bi-camera drop-icon" style="font-size:22px;"></i>
         <div class="drop-label" style="font-size:12px;">Take or upload justification photo</div>
-        <input type="file" id="justInput" accept="image/*" style="display:none" />
+        <input type="file" id="justInput" accept="image/*" capture="environment" style="display:none" />
       </div>
       <div id="justPreviewArea" style="display:none;margin-bottom:12px;">
         <div class="preview-wrap">
@@ -355,7 +367,7 @@
         <i class="bi bi-person-lines-fill drop-icon" style="font-size:22px;color:var(--blue);"></i>
         <div class="drop-label" style="font-size:12px;">Upload Instructions/Contacts screenshot</div>
         <div class="drop-hint">Safeguard "Instructions!" tab · extracts names &amp; phones</div>
-        <input type="file" id="contactsInput" accept="image/*" style="display:none" />
+        <input type="file" id="contactsInput" accept="image/*" capture="environment" style="display:none" />
       </div>
 
       <div id="contactsOcrBox" style="display:none;" class="ocr-box info">
@@ -428,7 +440,7 @@
               <i class="bi bi-image drop-icon" style="font-size:20px;"></i>
               <div class="drop-label" style="font-size:12px;">Upload screenshot of phone call log</div>
               <div class="drop-hint">Shows number dialed, duration &amp; timestamp</div>
-              <input type="file" id="callShotInput" accept="image/*" style="display:none" />
+              <input type="file" id="callShotInput" accept="image/*" capture="environment" style="display:none" />
             </div>
             <div id="callShotPreview" style="display:none;">
               <div class="preview-wrap">
@@ -491,7 +503,7 @@ function handleScreenshot(file) {
   readAsUrl(file, url => {
     document.getElementById('previewImg').src = url;
     document.getElementById('previewName').textContent = file.name;
-    document.getElementById('screenshotDropZone').style.display = 'none';
+    document.getElementById('dropZone').style.display = 'none';
     document.getElementById('previewArea').style.display = 'block';
     runOCR(file);
   });
@@ -499,7 +511,7 @@ function handleScreenshot(file) {
 function clearScreenshot() {
   screenshotFile = null;
   document.getElementById('screenshotInput').value = '';
-  document.getElementById('screenshotDropZone').style.display = 'flex';
+  document.getElementById('dropZone').style.display = 'flex';
   document.getElementById('previewArea').style.display = 'none';
   clearAutoFill();
 }

@@ -449,6 +449,8 @@ textarea.field-input {
 .r-icon.bad    { color: var(--red); }
 .r-icon.leave  { color: var(--accent); }
 .r-icon.gated  { color: var(--teal); }
+.r-icon.dog    { color: #e07b00; }
+.r-icon.child  { color: #7c3aed; }
 
 .r-label {
   font-weight: 700;
@@ -761,6 +763,8 @@ textarea.field-input {
 .badge-bad    { background: rgba(224,53,53,0.1);  color: var(--red); }
 .badge-leave  { background: rgba(245,166,35,0.12); color: #8a5800; }
 .badge-gated  { background: rgba(11,188,212,0.1);  color: #077080; }
+.badge-dog    { background: rgba(224,123,0,0.1);   color: #8a4a00; }
+.badge-child  { background: rgba(124,58,237,0.1);  color: #5b21b6; }
 .badge-photo  { background: var(--gray-100); color: var(--gray-600); border: 1px solid var(--gray-200); }
 
 .td-arrow { color: var(--gray-400); font-size: 10px; }
