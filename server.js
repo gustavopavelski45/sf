@@ -239,8 +239,11 @@ function parseContacts(rawText) {
   const ins = rawText.match(/Insurance\s*Carrier\s*[:\-]\s*([A-Za-z ]{3,30})/i);
   if (ins) c.insurance_carrier = ins[1].trim();
   const allPhones = [...rawText.matchAll(/\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}/g)].map(m => formatPhone(m[0]));
-  if (!c.policy_holder_phone && allPhones[0]) c.policy_holder_phone = allPhones[0];
-  if (!c.agent_phone          && allPhones[1]) c.agent_phone          = allPhones[1];
+  const uniquePhones = [...new Set(allPhones)];
+  if (!c.policy_holder_phone && uniquePhones[0]) c.policy_holder_phone = uniquePhones[0];
+  // Only use second phone as agent fallback if it's genuinely different from policyholder phone
+  if (!c.agent_phone && uniquePhones[1] && uniquePhones[1] !== c.policy_holder_phone)
+    c.agent_phone = uniquePhones[1];
   return c;
 }
 
@@ -310,13 +313,13 @@ Wait for a response.
 - If they say ${name} is not available, leave the voicemail message below and end the call.
 
 STEP 2 — Deliver the message:
-Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions. ${s.agentScript}"
+Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions. ${s.agentScript} If you have any questions or need to reach us, please call us back at ${JBA_PHONE}."
 
 If they have questions, answer professionally and briefly.
 If they confirm they will help or take action, thank them warmly and end the call.
 
 VOICEMAIL — if no one answers or you reach voicemail:
-Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions regarding a property survey at ${address}, order number ${orderNum}. ${s.agentScript} Please call us back at your earliest convenience. Thank you and have a great day."
+Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions regarding a property survey at ${address}, order number ${orderNum}. ${s.agentScript} Please call us back at ${JBA_PHONE} at your earliest convenience. Thank you and have a great day."
 
 STRICT RULES:
 - Always say SURVEY, never say inspection
@@ -337,7 +340,7 @@ Wait for a response.
 - If they say ${name} is not available, leave the voicemail message below and end the call.
 
 STEP 2 — Deliver the message:
-Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions. ${s.phScript}"
+Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions. ${s.phScript} If you have any questions, please call us back at ${JBA_PHONE}."
 
 YOUR GOALS after the introduction:
 1. Confirm you are speaking with the right person before delivering the message.
@@ -345,7 +348,7 @@ YOUR GOALS after the introduction:
 3. Be helpful and answer any questions they have.
 
 VOICEMAIL — if no one answers or you reach voicemail:
-Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions regarding a property survey at ${address}, order number ${orderNum}. ${s.phScript} Please call us back at your earliest convenience. Thank you."
+Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions regarding a property survey at ${address}, order number ${orderNum}. ${s.phScript} Please call us back at ${JBA_PHONE} at your earliest convenience. Thank you."
 
 STRICT RULES:
 - Always say SURVEY, never say inspection
@@ -437,7 +440,8 @@ app.post('/api/bland/dispatch', async (req, res) => {
 
     const targets = [
       rep.policy_holder_phone ? { type: 'policy_holder', phone: rep.policy_holder_phone, name: rep.policy_holder_name } : null,
-      rep.agent_phone         ? { type: 'agent',         phone: rep.agent_phone,         name: rep.agent_name } : null,
+      rep.agent_phone && rep.agent_phone !== rep.policy_holder_phone
+        ? { type: 'agent', phone: rep.agent_phone, name: rep.agent_name } : null,
     ].filter(Boolean);
 
     const dispatched = [];
