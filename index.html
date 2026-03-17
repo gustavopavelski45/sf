@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="style.css" />
   <style>
     /* ── Step 5 extras ── */
+    @keyframes fadeIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
     .contact-block {
       background: var(--gray-100);
       border: 1px solid var(--gray-200);
@@ -170,7 +171,7 @@
     </div>
   </a>
   <div class="nav-actions">
-    <a href="dashboard.html" class="btn-nav">
+    <a href="/dashboard" class="btn-nav">
       <i class="bi bi-bar-chart-line"></i>Dashboard
     </a>
   </div>
@@ -742,7 +743,7 @@ async function submitReport() {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'Server error');
     savedReportId = data.id;
-    toast(`Report #${data.id} saved ✓`, 'success');
+    showSubmitSuccess(data.id);
     unlockBlandPanel();
   } catch (e) {
     toast(e.message, 'error');
@@ -750,6 +751,51 @@ async function submitReport() {
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-send-fill"></i>Submit Report';
   }
+}
+
+function showSubmitSuccess(id) {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-send-fill"></i>Submit Report';
+
+  // Show big success banner
+  const existing = document.getElementById('successBanner');
+  if (existing) existing.remove();
+
+  const banner = document.createElement('div');
+  banner.id = 'successBanner';
+  banner.style.cssText = `
+    background: linear-gradient(135deg, #0d3d1f, #0f5c2e);
+    border: 1.5px solid var(--green);
+    border-radius: var(--radius-lg);
+    padding: 20px 18px;
+    margin-bottom: 14px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    animation: fadeIn .4s ease;
+  `;
+  banner.innerHTML = `
+    <div style="width:46px;height:46px;background:rgba(31,186,116,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+      <i class="bi bi-check-circle-fill" style="font-size:24px;color:var(--green)"></i>
+    </div>
+    <div style="flex:1">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:600;letter-spacing:.06em;margin-bottom:4px;">REPORT #${id} SUBMITTED</div>
+      <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">You're all set — move to the next property!</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.7);line-height:1.5;">
+        Your report has been saved successfully. The system is now handling the follow-up calls automatically.<br>
+        <strong style="color:rgba(255,255,255,.9);">You can leave the property and head to your next stop.</strong>
+      </div>
+    </div>
+  `;
+
+  // Insert banner before submit button
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.parentNode.insertBefore(banner, submitBtn);
+  banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  // Also show toast
+  toast(`Report #${id} saved ✓ — Head to next property!`, 'success');
 }
 
 function unlockBlandPanel() {
@@ -871,6 +917,7 @@ function readAsUrl(file, cb) {
 
 function resetForm() {
   screenshotFile = null; justFile = null; callShotFile = null; savedReportId = null;
+  const sb = document.getElementById('successBanner'); if (sb) sb.remove();
   clearScreenshot(); clearJust(); clearCallShot();
   ['fieldAddress','fieldWorkCode','fieldClient','fieldDueDate','fieldLockbox','fieldName','fieldOrderNum',
    'fieldNotes','phName','phPhone','agentName','agentPhone','fieldCarrier'].forEach(id => {
