@@ -371,6 +371,18 @@
         <input type="file" id="contactsInput" accept="image/*" style="display:none" />
       </div>
 
+      <div id="contactsPreviewArea" style="display:none;margin-bottom:10px;">
+        <div class="preview-wrap">
+          <img id="contactsPreviewImg" class="preview-img" />
+          <div class="preview-foot" style="background:var(--gray-100);padding:7px 12px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--gray-200);">
+            <span class="preview-name" id="contactsPreviewName" style="font-family:var(--mono);font-size:11px;color:var(--gray-600);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">–</span>
+            <button class="btn-remove" onclick="clearContacts()" style="background:none;border:none;color:var(--red);font-size:12px;cursor:pointer;padding:2px 6px;border-radius:3px;">
+              <i class="bi bi-x-circle"></i> Remove
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div id="contactsOcrBox" style="display:none;" class="ocr-box info">
         <div class="ocr-row"><span class="spin"></span><span>Extracting contact info…</span></div>
         <div class="ocr-bar-wrap"><div class="ocr-bar-fill" id="contactsBar" style="width:0%"></div></div>
@@ -538,6 +550,14 @@ function clearJust() {
 // ── Contacts screenshot ───────────────────────────────────────
 document.getElementById('contactsInput').addEventListener('change', function() { if (this.files[0]) handleContacts(this.files[0]); });
 function handleContacts(file) {
+  // Show image preview
+  readAsUrl(file, url => {
+    document.getElementById('contactsPreviewImg').src = url;
+    document.getElementById('contactsPreviewName').textContent = file.name;
+    document.getElementById('contactsDropZone').style.display = 'none';
+    document.getElementById('contactsPreviewArea').style.display = 'block';
+  });
+
   const box = document.getElementById('contactsOcrBox');
   box.style.display = 'block';
   box.className = 'ocr-box info';
@@ -588,6 +608,17 @@ function handleContacts(file) {
       box.innerHTML = `<div class="ocr-row"><i class="bi bi-wifi-off" style="color:var(--red)"></i>
         <span><strong>Error:</strong> ${e.message}. Fill fields manually.</span></div>`;
     });
+}
+
+function clearContacts() {
+  document.getElementById('contactsInput').value = '';
+  document.getElementById('contactsDropZone').style.display = 'flex';
+  document.getElementById('contactsPreviewArea').style.display = 'none';
+  document.getElementById('contactsOcrBox').style.display = 'none';
+  ['phName','phPhone','agentName','agentPhone','fieldCarrier'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.classList.remove('autofilled'); }
+  });
 }
 
 function startContactsTicker(from, to, ms) {
@@ -878,12 +909,32 @@ async function dispatchCalls() {
     statusBox.className = 'call-status-row success';
     statusBox.innerHTML = `<i class="bi bi-check-circle-fill" style="color:var(--green)"></i>
       <span><strong>${data.dispatched} call(s) dispatched.</strong> 
-      ${data.errors?.length ? `${data.errors.length} error(s): ${data.errors.map(e=>e.type).join(', ')}` : 'Bland.ai is calling both contacts now.'}
-      Webhook will update status automatically.</span>`;
+      ${data.errors?.length ? `${data.errors.length} error(s): ${data.errors.map(e=>e.type).join(', ')}` : 'Anna is calling both contacts now.'}
+      </span>`;
 
     btn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Calls Dispatched';
 
-    toast(`${data.dispatched} call(s) dispatched via Bland.ai ✓`, 'success');
+    // Show big call success banner
+    const existing = document.getElementById('callSuccessBanner');
+    if (existing) existing.remove();
+    const banner = document.createElement('div');
+    banner.id = 'callSuccessBanner';
+    banner.style.cssText = 'background:linear-gradient(135deg,#0d3d1f,#0f5c2e);border:1.5px solid var(--green);border-radius:var(--radius-lg);padding:20px 18px;margin-top:14px;display:flex;gap:14px;align-items:flex-start;animation:fadeIn .4s ease;';
+    banner.innerHTML = `
+      <div style="width:46px;height:46px;background:rgba(31,186,116,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="bi bi-telephone-fill" style="font-size:22px;color:var(--green)"></i>
+      </div>
+      <div style="flex:1">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:600;letter-spacing:.06em;margin-bottom:4px;">${data.dispatched} CALL(S) DISPATCHED</div>
+        <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">Anna is on it — you're free to go!</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.7);line-height:1.5;">
+          The calls have been placed to both contacts.<br>
+          <strong style="color:rgba(255,255,255,.9);">You can leave the property now and head to your next stop. The system will handle the rest.</strong>
+        </div>
+      </div>
+    `;
+    statusBox.parentNode.insertBefore(banner, statusBox.nextSibling);
+    banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     // Update pills
     data.calls?.forEach(c => {
@@ -918,6 +969,7 @@ function readAsUrl(file, cb) {
 function resetForm() {
   screenshotFile = null; justFile = null; callShotFile = null; savedReportId = null;
   const sb = document.getElementById('successBanner'); if (sb) sb.remove();
+  const cb = document.getElementById('callSuccessBanner'); if (cb) cb.remove();
   clearScreenshot(); clearJust(); clearCallShot();
   ['fieldAddress','fieldWorkCode','fieldClient','fieldDueDate','fieldLockbox','fieldName','fieldOrderNum',
    'fieldNotes','phName','phPhone','agentName','agentPhone','fieldCarrier'].forEach(id => {
