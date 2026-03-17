@@ -237,7 +237,7 @@
     </div>
     <div class="card-body">
       <div class="field-group">
-        <label class="field-label" for="inspectorName">Inspector Name <span class="req">*</span></label>
+        <label class="field-label" for="inspectorName">Inspector Name <span class="req">*</span> <span id="inspectorSavedHint" style="font-size:10px;color:var(--green);font-weight:600;display:none;letter-spacing:0;">✓ saved</span></label>
         <input type="text" id="inspectorName" class="field-input" placeholder="Your full name" autocomplete="name" />
       </div>
       <div class="field-group">
@@ -443,6 +443,31 @@
 <script>
 // ── State ─────────────────────────────────────────────────────
 let screenshotFile = null, justFile = null;
+
+// ── Inspector name persistence ────────────────────────────────
+const INSPECTOR_KEY = 'jba_inspector_name';
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem(INSPECTOR_KEY);
+  if (saved) {
+    const el = document.getElementById('inspectorName');
+    if (el) el.value = saved;
+    const hint = document.getElementById('inspectorSavedHint');
+    if (hint) hint.style.display = 'inline';
+  }
+});
+document.addEventListener('DOMContentLoaded', () => {
+  const el = document.getElementById('inspectorName');
+  if (el) {
+    el.addEventListener('blur', () => {
+      const v = el.value.trim();
+      if (v) {
+        localStorage.setItem(INSPECTOR_KEY, v);
+        const hint = document.getElementById('inspectorSavedHint');
+        if (hint) hint.style.display = 'inline';
+      }
+    });
+  }
+});
 let ocrTimer = null, contactsTimer = null;
 let savedReportId = null;
 
