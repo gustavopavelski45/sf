@@ -635,6 +635,11 @@ app.get('/api/stats', (_req, res) => {
     const reports = readDB().reports;
     res.json({
       totalReports: reports.length,
+      badAddress:   reports.filter(r => r.reason === 'bad_address').length,
+      askedLeave:   reports.filter(r => r.reason === 'asked_to_leave').length,
+      gated:        reports.filter(r => r.reason === 'gated').length,
+      dog:          reports.filter(r => r.reason === 'dog').length,
+      child:        reports.filter(r => r.reason === 'child').length,
       callPending: reports.filter(r => !r.call_status || r.call_status === 'pending').length,
       callActive:  reports.filter(r => r.call_status === 'calling').length,
       callDone:    reports.filter(r => ['answered','voicemail','no_answer'].includes(r.call_status)).length,

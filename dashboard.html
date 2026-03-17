@@ -44,9 +44,9 @@
       <div class="stat-lbl">Bad Address</div>
     </div>
     <div class="stat-tile amber">
-      <i class="bi bi-lock stat-ico"></i>
+      <i class="bi bi-exclamation-triangle stat-ico"></i>
       <div class="stat-num" id="statOther">–</div>
-      <div class="stat-lbl">Gated / Asked</div>
+      <div class="stat-lbl">Access Issues</div>
     </div>
     <div class="stat-tile" style="border-bottom:3px solid var(--teal);">
       <i class="bi bi-telephone-fill stat-ico" style="color:var(--teal);"></i>
@@ -92,9 +92,11 @@
       <div class="filter-label">Reason</div>
       <select class="filter-input" id="filterReason" onchange="loadReports()">
         <option value="">All reasons</option>
-        <option value="bad_address">Bad Address</option>
         <option value="asked_to_leave">Asked to Leave</option>
         <option value="gated">Gated</option>
+        <option value="dog">Dog in Yard</option>
+        <option value="bad_address">Bad Address</option>
+        <option value="child">Child in Property</option>
       </select>
     </div>
     <div class="filter-group">
@@ -169,9 +171,11 @@
 
 <script>
 const REASONS = {
-  bad_address:    { label: 'Bad Address',    cls: 'badge-bad',   icon: 'bi-geo-alt-fill'  },
-  asked_to_leave: { label: 'Asked to Leave', cls: 'badge-leave', icon: 'bi-person-x-fill' },
-  gated:          { label: 'Gated',          cls: 'badge-gated', icon: 'bi-lock-fill'     },
+  asked_to_leave: { label: 'Asked to Leave', cls: 'badge-leave',  icon: 'bi-person-x-fill'           },
+  gated:          { label: 'Gated',          cls: 'badge-gated',  icon: 'bi-lock-fill'               },
+  dog:            { label: 'Dog in Yard',    cls: 'badge-dog',    icon: 'bi-exclamation-triangle-fill'},
+  bad_address:    { label: 'Bad Address',    cls: 'badge-bad',    icon: 'bi-geo-alt-fill'            },
+  child:          { label: 'Child in Prop.', cls: 'badge-child',  icon: 'bi-emoji-smile-fill'        },
 };
 
 const CALL_STATUS = {
@@ -199,7 +203,7 @@ async function loadStats() {
     document.getElementById('statTotal').textContent = s.totalReports || 0;
     document.getElementById('statToday').textContent = s.today || 0;
     document.getElementById('statBad').textContent   = s.badAddress || 0;
-    document.getElementById('statOther').textContent = (s.gated || 0) + (s.askedLeave || 0);
+    document.getElementById('statOther').textContent = (s.gated || 0) + (s.askedLeave || 0) + (s.dog || 0) + (s.child || 0);
     document.getElementById('statCalls').textContent = s.callDone || 0;
     document.getElementById('navSubtitle').textContent =
       `${s.totalReports||0} report${(s.totalReports||0)!==1?'s':''} · ${s.officeDueSoon||0} due soon · ${s.officeOverdue||0} overdue · ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}`;
