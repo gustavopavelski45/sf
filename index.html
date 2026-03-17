@@ -192,7 +192,7 @@
            ondrop="handleDrop(event,'screenshot')"
            ondragleave="this.classList.remove('dragover')">
       <i class="bi bi-cloud-arrow-up-fill drop-icon"></i>
-      <div class="drop-label">Tap to select or take photo</div>
+      <div class="drop-label">Tap to select · photo or gallery</div>
       <div class="drop-hint">Details tab · JPG · PNG · HEIC · max 15 MB</div>
       <input
         type="file"
@@ -329,7 +329,7 @@
            style="margin-bottom:12px;">
         <i class="bi bi-camera drop-icon" style="font-size:22px;"></i>
         <div class="drop-label" style="font-size:12px;">Take or upload justification photo</div>
-        <input type="file" id="justInput" accept="image/*" capture="environment" style="display:none" />
+        <input type="file" id="justInput" accept="image/*" style="display:none" />
       </div>
       <div id="justPreviewArea" style="display:none;margin-bottom:12px;">
         <div class="preview-wrap">
@@ -367,7 +367,7 @@
         <i class="bi bi-person-lines-fill drop-icon" style="font-size:22px;color:var(--blue);"></i>
         <div class="drop-label" style="font-size:12px;">Upload Instructions/Contacts screenshot</div>
         <div class="drop-hint">Safeguard "Instructions!" tab · extracts names &amp; phones</div>
-        <input type="file" id="contactsInput" accept="image/*" capture="environment" style="display:none" />
+        <input type="file" id="contactsInput" accept="image/*" style="display:none" />
       </div>
 
       <div id="contactsOcrBox" style="display:none;" class="ocr-box info">
@@ -440,7 +440,7 @@
               <i class="bi bi-image drop-icon" style="font-size:20px;"></i>
               <div class="drop-label" style="font-size:12px;">Upload screenshot of phone call log</div>
               <div class="drop-hint">Shows number dialed, duration &amp; timestamp</div>
-              <input type="file" id="callShotInput" accept="image/*" capture="environment" style="display:none" />
+              <input type="file" id="callShotInput" accept="image/*" style="display:none" />
             </div>
             <div id="callShotPreview" style="display:none;">
               <div class="preview-wrap">
@@ -503,7 +503,7 @@ function handleScreenshot(file) {
   readAsUrl(file, url => {
     document.getElementById('previewImg').src = url;
     document.getElementById('previewName').textContent = file.name;
-    document.getElementById('dropZone').style.display = 'none';
+    document.getElementById('screenshotDropZone').style.display = 'none';
     document.getElementById('previewArea').style.display = 'block';
     runOCR(file);
   });
@@ -511,7 +511,7 @@ function handleScreenshot(file) {
 function clearScreenshot() {
   screenshotFile = null;
   document.getElementById('screenshotInput').value = '';
-  document.getElementById('dropZone').style.display = 'flex';
+  document.getElementById('screenshotDropZone').style.display = 'flex';
   document.getElementById('previewArea').style.display = 'none';
   clearAutoFill();
 }

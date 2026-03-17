@@ -15,7 +15,7 @@ const https   = require('https');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-const OCR_API_KEY   = process.env.OCR_API_KEY   || 'helloworld';
+const OCR_API_KEY   = process.env.OCR_API_KEY   || 'K85989969588957';
 const BLAND_API_KEY = process.env.BLAND_API_KEY  || '';
 const APP_BASE_URL  = process.env.APP_BASE_URL   || `http://localhost:${process.env.PORT || 3000}`;
 
@@ -265,10 +265,9 @@ function blandCall({ phone, contactType, contactName, report }) {
     const roleLabel  = contactType === 'policy_holder' ? 'property owner / policyholder' : 'listing agent';
     const name       = contactName || `the ${roleLabel}`;
 
-    const isAgent  = contactType === 'agent';
-    const reason   = report.reason || '';
+    const isAgent = contactType === 'agent';
+    const reason  = report.reason || '';
 
-    // ── Situação-específica ───────────────────────────────────────
     const situationMap = {
       asked_to_leave: {
         agentScript: 'Our inspector arrived on site but was asked to leave and could not complete the visit. Could you please assist by contacting the client and advising that we need permission to return and complete the survey?',
@@ -669,7 +668,7 @@ app.listen(PORT, () => {
   console.log('✅  JBA Field Inspector App v3');
   console.log(`   Inspector  →  http://localhost:${PORT}/`);
   console.log(`   Dashboard  →  http://localhost:${PORT}/dashboard.html`);
-  console.log(`   OCR        →  OCR.space (test key)`);
+  console.log(`   OCR        →  OCR.space ✅ configured (${OCR_API_KEY.slice(0,6)}...)`);
   console.log(`   Bland.ai   →  ${BLAND_API_KEY ? '✅ configured' : '⚠️  BLAND_API_KEY not set — add to env'}`);
   console.log(`   Webhook    →  POST ${APP_BASE_URL}/api/bland/webhook\n`);
 });
