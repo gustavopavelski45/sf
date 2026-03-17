@@ -299,14 +299,6 @@ function blandCall({ phone, contactType, contactName, report }) {
 
     const s = situationMap[reason] || defaultScripts;
 
-    const s = situationMap[reason] || {
-      situation: 'our field representative was unable to complete the survey today',
-      agentAsk:  'Could you please contact your client so we can schedule a time to complete the exterior survey?',
-      phAsk:     'We would like to schedule a time to return and complete the exterior survey.',
-      vmAgent:   'We were unable to complete the survey. Please contact your client so we can schedule a return visit.',
-      vmPh:      'We were unable to complete the exterior survey. Please call us back to reschedule.',
-    };
-
     const task = isAgent ? `
 You are Anna, calling on behalf of JBA Property Solutions.
 
