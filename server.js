@@ -87,6 +87,111 @@ function renderTextBlock(lines, x, y, lineHeight, fill = '#111827', size = 20, w
   return lines.map((line, i) => `<text x="${x}" y="${y + i * lineHeight}" font-size="${size}" font-weight="${weight}" fill="${fill}" font-family="Arial, Helvetica, sans-serif">${escapeXml(line)}</text>`).join('');
 }
 
+function generateCallScreenshotSVG(report, call) {
+  const filename = `call-screenshot-report${report.id}-${call.type}-${Date.now()}.svg`;
+  const outPath  = path.join('uploads', 'calls', filename);
+
+  const contactName  = call.type === 'agent'
+    ? (report.agent_name          || 'Insurance Agent')
+    : (report.policy_holder_name  || 'Policy Holder');
+  const contactPhone = call.type === 'agent'
+    ? (report.agent_phone         || '—')
+    : (report.policy_holder_phone || '—');
+  const typeLabel    = call.type === 'agent' ? 'Insurance Agent' : 'Policy Holder';
+  const status       = call.status || 'answered';
+  const statusLabels = { answered:'Call Ended', voicemail:'Voicemail Left', no_answer:'No Answer', calling:'In Call', error:'Failed' };
+  const statusLabel  = statusLabels[status] || status;
+  const callTime     = call.ended_at
+    ? new Date(call.ended_at).toLocaleString('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',hour12:true})
+    : new Date().toLocaleString('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',hour12:true});
+  const callDate     = call.ended_at
+    ? new Date(call.ended_at).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',year:'numeric'})
+    : new Date().toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',year:'numeric'});
+  // Duration estimate
+  const dur = (call.dispatched_at && call.ended_at)
+    ? (() => { const s = Math.round((new Date(call.ended_at)-new Date(call.dispatched_at))/1000); return s > 0 ? `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}` : '0:00'; })()
+    : '—';
+  const carrier = escapeXml(report.insurance_carrier || 'State Farm');
+  const cName   = escapeXml(contactName.length > 18 ? contactName.slice(0,17)+'…' : contactName);
+  const cPhone  = escapeXml(contactPhone);
+  const ordNum  = escapeXml(report.order_number || '—');
+
+  const bgColor   = status === 'answered' ? '#1a3a1a' : status === 'voicemail' ? '#2d2200' : '#2a0a0a';
+  const dotColor  = status === 'answered' ? '#4ade80' : status === 'voicemail' ? '#fbbf24' : '#f87171';
+  const statColor = status === 'answered' ? '#86efac' : status === 'voicemail' ? '#fde68a' : '#fca5a5';
+
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="580" viewBox="0 0 320 580">
+  <defs>
+    <clipPath id="phone"><rect x="8" y="8" width="304" height="564" rx="36"/></clipPath>
+  </defs>
+  <!-- Phone shell -->
+  <rect x="0" y="0" width="320" height="580" rx="42" fill="#1a1a1a"/>
+  <rect x="3" y="3" width="314" height="574" rx="40" fill="none" stroke="#333" stroke-width="1.5"/>
+  <!-- Screen -->
+  <rect x="8" y="8" width="304" height="564" rx="36" fill="${bgColor}"/>
+  <!-- Status bar -->
+  <rect x="8" y="8" width="304" height="44" rx="0" fill="rgba(0,0,0,0.3)" clip-path="url(#phone)"/>
+  <text x="28" y="32" font-family="Arial,sans-serif" font-size="13" fill="#fff" font-weight="600">${escapeXml(callTime)}</text>
+  <!-- Notch -->
+  <rect x="118" y="8" width="84" height="26" rx="13" fill="#1a1a1a"/>
+  <!-- Signal bars -->
+  <rect x="250" y="22" width="4" height="8" rx="1" fill="#fff" opacity=".4"/>
+  <rect x="257" y="19" width="4" height="11" rx="1" fill="#fff" opacity=".6"/>
+  <rect x="264" y="16" width="4" height="14" rx="1" fill="#fff" opacity=".8"/>
+  <rect x="271" y="13" width="4" height="17" rx="1" fill="#fff"/>
+  <!-- Wifi -->
+  <text x="282" y="33" font-family="Arial,sans-serif" font-size="14" fill="#fff">⊙</text>
+  <!-- JBA Tag -->
+  <rect x="94" y="58" width="132" height="22" rx="11" fill="rgba(255,255,255,0.1)"/>
+  <text x="160" y="73" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.7)" text-anchor="middle">JBA Property Solutions</text>
+  <!-- Contact avatar circle -->
+  <circle cx="160" cy="148" r="52" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+  <circle cx="160" cy="135" r="22" fill="rgba(255,255,255,0.2)"/>
+  <ellipse cx="160" cy="170" rx="30" ry="18" fill="rgba(255,255,255,0.2)"/>
+  <!-- Status dot -->
+  <circle cx="198" cy="105" r="8" fill="${dotColor}"/>
+  <!-- Contact name -->
+  <text x="160" y="222" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="#ffffff" text-anchor="middle">${cName}</text>
+  <!-- Type label -->
+  <text x="160" y="246" font-family="Arial,sans-serif" font-size="13" fill="rgba(255,255,255,0.6)" text-anchor="middle">${escapeXml(typeLabel)}</text>
+  <!-- Phone number -->
+  <text x="160" y="272" font-family="Arial,sans-serif" font-size="14" fill="rgba(255,255,255,0.5)" text-anchor="middle">${cPhone}</text>
+  <!-- Status label -->
+  <text x="160" y="306" font-family="Arial,sans-serif" font-size="15" font-weight="600" fill="${statColor}" text-anchor="middle">${escapeXml(statusLabel)}</text>
+  <!-- Duration -->
+  <text x="160" y="332" font-family="Arial,sans-serif" font-size="28" font-weight="700" fill="#ffffff" text-anchor="middle">${escapeXml(dur)}</text>
+  <!-- Divider -->
+  <line x1="40" y1="358" x2="280" y2="358" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+  <!-- Info rows -->
+  <text x="40" y="382" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)">ORDER</text>
+  <text x="280" y="382" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="end">${ordNum}</text>
+  <text x="40" y="404" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)">CARRIER</text>
+  <text x="280" y="404" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="end">${carrier}</text>
+  <text x="40" y="426" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)">DATE</text>
+  <text x="280" y="426" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="end">${escapeXml(callDate)}</text>
+  <text x="40" y="448" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.4)">ANSWERED BY</text>
+  <text x="280" y="448" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.8)" text-anchor="end">${escapeXml(call.answered_by||'—')}</text>
+  <!-- Divider -->
+  <line x1="40" y1="464" x2="280" y2="464" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+  <!-- Action buttons -->
+  <circle cx="100" cy="510" r="30" fill="rgba(255,255,255,0.08)"/>
+  <text x="100" y="517" font-family="Arial,sans-serif" font-size="22" text-anchor="middle" fill="rgba(255,255,255,0.5)">✉</text>
+  <circle cx="160" cy="510" r="30" fill="rgba(239,68,68,0.8)"/>
+  <text x="160" y="517" font-family="Arial,sans-serif" font-size="22" text-anchor="middle" fill="#fff">✆</text>
+  <circle cx="220" cy="510" r="30" fill="rgba(255,255,255,0.08)"/>
+  <text x="220" y="517" font-family="Arial,sans-serif" font-size="22" text-anchor="middle" fill="rgba(255,255,255,0.5)">🔊</text>
+  <!-- Bottom bar -->
+  <rect x="130" y="556" width="60" height="4" rx="2" fill="rgba(255,255,255,0.3)"/>
+  <!-- Verified badge -->
+  <rect x="55" y="472" width="210" height="22" rx="11" fill="rgba(255,255,255,0.06)"/>
+  <text x="160" y="487" font-family="Arial,sans-serif" font-size="10" fill="rgba(255,255,255,0.4)" text-anchor="middle">✓ Verified outbound call via Bland.ai</text>
+</svg>`;
+
+  fs.writeFileSync(outPath, svg, 'utf8');
+  return filename;
+}
+
 function generateCallEvidenceHTML(report, call) {
   const callType   = call.type === 'agent' ? 'Insurance Agent' : 'Policy Holder';
   const contactName  = call.type === 'agent' ? (report.agent_name || '—') : (report.policy_holder_name || '—');
@@ -264,7 +369,38 @@ body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#0a1628;-we
   <div class="fr">${esc(carrier)} Partner<br><span style="color:#8a9ab8;font-weight:400">Order: ${esc(report.order_number||'—')}</span></div>
 </div>
 </div>
-<button class="print-btn" onclick="window.print()">🖨 Print / Save PDF</button>
+<div style="position:fixed;bottom:18px;right:18px;display:flex;flex-direction:column;gap:8px;z-index:999">
+  <button class="print-btn" onclick="window.print()">🖨 Print / Save PDF</button>
+  <button class="print-btn" id="jpegBtn" onclick="saveJPEG()" style="background:#CC0000;">📷 Save as JPEG</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+async function saveJPEG() {
+  const btn = document.getElementById('jpegBtn');
+  btn.textContent = '⏳ Generating...';
+  btn.disabled = true;
+  try {
+    // Hide buttons during capture
+    document.querySelectorAll('.print-btn, #jpegBtn').forEach(b => b.style.display='none');
+    const canvas = await html2canvas(document.querySelector('.page'), {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+    document.querySelectorAll('.print-btn, #jpegBtn').forEach(b => b.style.display='');
+    const link = document.createElement('a');
+    link.download = 'call-evidence-report${report.id}-${call.type}.jpg';
+    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    link.click();
+  } catch(e) {
+    alert('Error generating JPEG: ' + e.message);
+  }
+  btn.textContent = '📷 Save as JPEG';
+  btn.disabled = false;
+  document.querySelectorAll('.print-btn, #jpegBtn').forEach(b => b.style.display='');
+}
+</script>
 </body>
 </html>`;
 
@@ -556,9 +692,15 @@ app.post('/api/bland/webhook', (req, res) => {
 
     if (entry) {
       Object.assign(entry, { status: mapped, answered_by, recording_url, summary: summary || '', ended_at: nowISO() });
-      entry.evidence_file = generateCallEvidenceHTML(rep, entry);
-      // Keep backward-compat field pointing to last evidence
-      rep.call_screenshot = entry.evidence_file;
+      // Generate evidence HTML — wrapped so a crash here doesn't lose the call data
+      try {
+        entry.evidence_file    = generateCallEvidenceHTML(rep, entry);
+        entry.screenshot_file  = generateCallScreenshotSVG(rep, entry);
+        // call_screenshot points to last screenshot for backward compat
+        rep.call_screenshot = entry.screenshot_file;
+      } catch (evErr) {
+        console.error('Evidence generation failed:', evErr.message);
+      }
       rep.office_alert_text = getOfficeAlertText(rep);
       rep.office_alert_sent_at = nowISO();
       if (!rep.office_timer_started_at) rep.office_timer_started_at = rep.created_at || nowISO();
@@ -573,7 +715,7 @@ app.post('/api/bland/webhook', (req, res) => {
     else rep.call_status = 'calling';
 
     writeDB(db);
-    console.log(`Webhook: report ${report_id} call ${call_id} → ${mapped}`);
+    console.log(`Webhook: report ${report_id} call ${call_id} → ${mapped} | evidence: ${entry?.evidence_file || 'none'}`);
   } catch (e) { console.error('Webhook:', e.message); }
   res.sendStatus(200);
 });
