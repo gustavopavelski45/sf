@@ -18,6 +18,7 @@ const PORT = process.env.PORT || 3000;
 const OCR_API_KEY   = process.env.OCR_API_KEY   || 'K85989969588957';
 const BLAND_API_KEY = process.env.BLAND_API_KEY  || '';
 const APP_BASE_URL  = process.env.APP_BASE_URL   || `http://localhost:${process.env.PORT || 3000}`;
+const JBA_PHONE     = process.env.JBA_PHONE || '(614) 304-3490';
 
 ['uploads/orders', 'uploads/justifications', 'uploads/calls', 'data'].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -241,7 +242,6 @@ function parseContacts(rawText) {
   const allPhones = [...rawText.matchAll(/\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}/g)].map(m => formatPhone(m[0]));
   const uniquePhones = [...new Set(allPhones)];
   if (!c.policy_holder_phone && uniquePhones[0]) c.policy_holder_phone = uniquePhones[0];
-  // Only use second phone as agent fallback if it's genuinely different from policyholder phone
   if (!c.agent_phone && uniquePhones[1] && uniquePhones[1] !== c.policy_holder_phone)
     c.agent_phone = uniquePhones[1];
   return c;
@@ -251,13 +251,6 @@ function formatPhone(raw) {
   const d = String(raw).replace(/\D/g, '');
   if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;
   if (d.length === 11 && d[0] === '1') return `(${d.slice(1,4)}) ${d.slice(4,7)}-${d.slice(7)}`;
-  return raw.trim();
-}
-
-function formatPhoneE164(raw) {
-  const d = String(raw).replace(/\D/g, '');
-  if (d.length === 10) return `+1${d}`;
-  if (d.length === 11 && d[0] === '1') return `+${d}`;
   return raw.trim();
 }
 
@@ -309,65 +302,33 @@ function blandCall({ phone, contactType, contactName, report }) {
     const s = situationMap[reason] || defaultScripts;
 
     const task = isAgent ? `
-You are Anna, a professional representative calling on behalf of JBA Property Solutions.
+You are Anna, calling on behalf of JBA Property Solutions.
 
-STEP 1 — Introduction (always start here):
-Say: "Hello, my name is Anna and I am calling from JBA Property Solutions. May I please speak with ${name}?"
+When someone answers say: "Hello, my name is Anna calling from JBA Property Solutions. May I please speak with ${name}?"
 
-Wait for a response.
-- If they say that is them or confirm, proceed to STEP 2.
-- If someone else answers, politely ask: "Could you please let ${name} know that Anna from JBA Property Solutions is calling? It is regarding a property survey."
-- If they say ${name} is not available, leave the voicemail message below and end the call.
+If they confirm, say: "${s.agentScript} If you have any questions, please call us back at ${JBA_PHONE}."
 
-STEP 2 — Deliver the message:
-Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions. ${s.agentScript} If you have any questions or need to reach us, please call us back at ${JBA_PHONE}."
+If unavailable or voicemail: "Hello, this is Anna from JBA Property Solutions calling about a property survey at ${address}, order number ${orderNum}. ${s.agentScript} Please call us back at ${JBA_PHONE}. Thank you and have a great day."
 
-If they have questions, answer professionally and briefly.
-If they confirm they will help or take action, thank them warmly and end the call.
-
-VOICEMAIL — if no one answers or you reach voicemail:
-Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions regarding a property survey at ${address}, order number ${orderNum}. ${s.agentScript} Please call us back at ${JBA_PHONE} at your earliest convenience. Thank you and have a great day."
-
-STRICT RULES:
-- Always say SURVEY, never say inspection
-- Never mention Safeguard Properties
-- Be professional, warm and concise
-- Always introduce yourself as Anna from JBA Property Solutions before delivering any message
-
-After the call, summarize the outcome clearly.
+RULES: Always say SURVEY never inspection. Never mention Safeguard Properties. Be professional and concise.
+After the call, summarize the outcome.
     `.trim() : `
-You are Anna, a professional representative calling on behalf of JBA Property Solutions.
+You are Anna, calling on behalf of JBA Property Solutions.
 
-STEP 1 — Introduction (always start here):
-Say: "Hello, my name is Anna and I am calling from JBA Property Solutions. May I please speak with ${name}?"
+When someone answers say: "Hello, my name is Anna calling from JBA Property Solutions. May I please speak with ${name}?"
 
-Wait for a response.
-- If they say that is them or confirm, proceed to STEP 2.
-- If someone else answers, politely ask: "Could you please let ${name} know that Anna from JBA Property Solutions is calling? It is regarding a property survey."
-- If they say ${name} is not available, leave the voicemail message below and end the call.
+If they confirm, say: "${s.phScript} If you have any questions, please call us back at ${JBA_PHONE}."
 
-STEP 2 — Deliver the message:
-Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions. ${s.phScript} If you have any questions, please call us back at ${JBA_PHONE}."
+YOUR GOALS: Confirm right person, then resolve the issue — get permission, gate code, address confirmation, or schedule a date/time (Mon-Sat, 8 AM-5 PM).
 
-YOUR GOALS after the introduction:
-1. Confirm you are speaking with the right person before delivering the message.
-2. Resolve the issue — get permission, gate code, confirmed address, or schedule a specific date and time (Mon–Sat, 8 AM–5 PM).
-3. Be helpful and answer any questions they have.
+If unavailable or voicemail: "Hello, this is Anna from JBA Property Solutions calling about a property survey at ${address}, order number ${orderNum}. ${s.phScript} Please call us back at ${JBA_PHONE}. Thank you."
 
-VOICEMAIL — if no one answers or you reach voicemail:
-Say: "Hello ${name}, my name is Anna and I am calling from JBA Property Solutions regarding a property survey at ${address}, order number ${orderNum}. ${s.phScript} Please call us back at ${JBA_PHONE} at your earliest convenience. Thank you."
-
-STRICT RULES:
-- Always say SURVEY, never say inspection
-- Never mention Safeguard Properties
-- Be professional, warm and concise
-- Always introduce yourself as Anna from JBA Property Solutions before delivering any message
-
+RULES: Always say SURVEY never inspection. Never mention Safeguard Properties. Be professional and concise.
 After the call, summarize the outcome: access granted / appointment scheduled (date+time) / voicemail left / no answer.
     `.trim();
 
     const body = JSON.stringify({
-      phone_number:        formatPhoneE164(phone),
+      phone_number:        phone,
       task,
       model:               'enhanced',
       language:            'en-US',
