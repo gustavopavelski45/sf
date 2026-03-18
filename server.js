@@ -228,7 +228,7 @@ function generateCallEvidenceHTML(report, call) {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Call Evidence — ${callType} — Report #${report.id}</title>
+<title>Call Evidence — Order ${report.order_number||report.id} — ${callType}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#0a1628;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -390,7 +390,7 @@ async function saveJPEG() {
     });
     document.querySelectorAll('.print-btn, #jpegBtn').forEach(b => b.style.display='');
     const link = document.createElement('a');
-    link.download = 'call-evidence-report${report.id}-${call.type}.jpg';
+    link.download = 'call-evidence-order${report.order_number||report.id}-${call.type === "agent" ? "agent" : "policyholder"}.jpg';
     link.href = canvas.toDataURL('image/jpeg', 0.95);
     link.click();
   } catch(e) {
