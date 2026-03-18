@@ -369,26 +369,47 @@ async function openDetail(id) {
     let callLogHtml = '';
     if (r.calls?.length) {
       callLogHtml = `<div class="call-log">
-        <div class="call-log-title"><i class="bi bi-telephone-fill"></i>Call Log</div>
-        ${r.calls.map(c => {
+        <div class="call-log-title"><i class="bi bi-telephone-fill"></i>Call Log — ${r.calls.length} call(s) dispatched</div>
+        ${r.calls.map((c, idx) => {
           const cst = CALL_STATUS[c.status] || CALL_STATUS.pending;
-          const typeLabel = c.type === 'policy_holder' ? 'Policy Holder' : 'Agent';
-          return `<div class="call-log-entry">
-            <div class="call-log-type">${typeLabel}</div>
-            <div>
-              <div class="call-log-phone">${esc(c.phone||'')}</div>
-              <div class="call-log-meta">
-                <span class="badge ${cst.cls}" style="font-size:10px;padding:1px 6px;">
+          const typeLabel = c.type === 'policy_holder' ? 'Policy Holder' : 'Insurance Agent';
+          const dispTime = c.dispatched_at ? new Date(c.dispatched_at).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) + ' ET' : '—';
+          const endTime  = c.ended_at ? new Date(c.ended_at).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) + ' ET' : '—';
+          return `<div class="call-log-entry" style="border:1.5px solid var(--gray-200);border-radius:10px;padding:14px;margin-bottom:10px;background:#fafbfd;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="background:${c.type==='agent'?'var(--teal)':'var(--blue)'};color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:12px;letter-spacing:.5px;">${typeLabel}</span>
+                <span class="badge ${cst.cls}" style="font-size:10px;padding:2px 8px;">
                   <i class="bi ${cst.icon}"></i>${cst.label}
                 </span>
-                ${c.answered_by ? ` · Answered by: ${esc(c.answered_by)}` : ''}
-                ${c.dispatched_at ? ` · ${new Date(c.dispatched_at).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}` : ''}
               </div>
-              ${c.summary ? `<div class="call-log-summary">"${esc(c.summary)}"</div>` : ''}
-              ${c.recording_url ? `<a href="${esc(c.recording_url)}" target="_blank" class="recording-link" style="margin-top:5px;display:inline-flex;">
-                <i class="bi bi-play-circle-fill"></i>Listen to Recording
-              </a>` : ''}
+              ${c.evidence_file ? `<a href="/api/reports/${r.id}/evidence/${idx}" target="_blank"
+                style="display:inline-flex;align-items:center;gap:5px;background:#0a3d8f;color:#fff;font-size:11px;font-weight:700;padding:5px 12px;border-radius:7px;text-decoration:none;">
+                🖨 Evidence Letter
+              </a>` : `<span style="font-size:11px;color:var(--gray-400);font-style:italic;">Evidence pending...</span>`}
             </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+              <div style="background:#f0f4fa;border-radius:6px;padding:7px 10px;">
+                <div style="font-size:10px;font-weight:700;color:#6b7fa8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;">Phone</div>
+                <div style="font-size:12px;font-weight:700;color:#0a1628;">${esc(c.phone||'—')}</div>
+              </div>
+              <div style="background:#f0f4fa;border-radius:6px;padding:7px 10px;">
+                <div style="font-size:10px;font-weight:700;color:#6b7fa8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;">Answered By</div>
+                <div style="font-size:12px;font-weight:700;color:#0a1628;">${esc(c.answered_by||'—')}</div>
+              </div>
+              <div style="background:#f0f4fa;border-radius:6px;padding:7px 10px;">
+                <div style="font-size:10px;font-weight:700;color:#6b7fa8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;">Initiated (ET)</div>
+                <div style="font-size:12px;font-weight:700;color:#0a1628;">${esc(dispTime)}</div>
+              </div>
+              <div style="background:#f0f4fa;border-radius:6px;padding:7px 10px;">
+                <div style="font-size:10px;font-weight:700;color:#6b7fa8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;">Ended (ET)</div>
+                <div style="font-size:12px;font-weight:700;color:#0a1628;">${esc(endTime)}</div>
+              </div>
+            </div>
+            ${c.summary ? `<div style="background:#fff;border:1px solid #dce6f0;border-radius:6px;padding:9px 12px;font-size:12px;color:#253756;line-height:1.6;margin-bottom:8px;font-style:italic;">"${esc(c.summary)}"</div>` : ''}
+            ${c.recording_url ? `<a href="${esc(c.recording_url)}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;color:#0a3d8f;font-size:11px;font-weight:700;text-decoration:none;">
+              <i class="bi bi-play-circle-fill"></i> Listen to Recording
+            </a>` : ''}
           </div>`;
         }).join('')}
       </div>`;

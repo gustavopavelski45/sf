@@ -86,52 +86,188 @@ function renderTextBlock(lines, x, y, lineHeight, fill = '#111827', size = 20, w
   return lines.map((line, i) => `<text x="${x}" y="${y + i * lineHeight}" font-size="${size}" font-weight="${weight}" fill="${fill}" font-family="Arial, Helvetica, sans-serif">${escapeXml(line)}</text>`).join('');
 }
 
-function generateCallEvidenceImage(report, call) {
-  const filename = `call-evidence-report-${report.id}-${Date.now()}.svg`;
-  const outPath = path.join('uploads', 'calls', filename);
-
-  const leftItems = [
-    ['Report ID', String(report.id || '—')],
-    ['Order Number', report.order_number || '—'],
-    ['Property Address', report.address || '—'],
-    ['Call Type', call.type || '—'],
-    ['Call Status', call.status || '—'],
-  ];
-  const rightItems = [
-    ['Call ID', call.call_id || '—'],
-    ['Answered By', call.answered_by || '—'],
-    ['Ended At', call.ended_at || nowISO()],
-    ['Recording URL', call.recording_url || 'Not available'],
-  ];
-
-  let svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1000" viewBox="0 0 1400 1000">
-  <rect width="1400" height="1000" fill="#f3f4f6"/>
-  <rect x="0" y="0" width="1400" height="120" fill="#111827"/>
-  <text x="60" y="72" font-size="42" font-weight="700" fill="#ffffff" font-family="Arial, Helvetica, sans-serif">Call Evidence</text>
-  <text x="60" y="103" font-size="22" fill="#ffffff" font-family="Arial, Helvetica, sans-serif">Automatically generated from Bland webhook data</text>
-  <rect x="50" y="150" width="1300" height="780" rx="10" fill="#ffffff" stroke="#d1d5db" stroke-width="2"/>
-`;
-
-  const addColumn = (items, x, startY) => {
-    let y = startY;
-    for (const [label, value] of items) {
-      svg += `<text x="${x}" y="${y}" font-size="18" font-weight="700" fill="#6b7280" font-family="Arial, Helvetica, sans-serif">${escapeXml(label)}</text>`;
-      const lines = wrapPlainText(value, 42).slice(0, 4);
-      svg += renderTextBlock(lines, x, y + 28, 26, '#111827', 20, '400');
-      y += 28 + (Math.max(1, lines.length) * 26) + 18;
-    }
+function generateCallEvidenceHTML(report, call) {
+  const callType   = call.type === 'agent' ? 'Insurance Agent' : 'Policy Holder';
+  const contactName  = call.type === 'agent' ? (report.agent_name || '—') : (report.policy_holder_name || '—');
+  const contactPhone = call.type === 'agent' ? (report.agent_phone || '—') : (report.policy_holder_phone || '—');
+  const carrier    = report.insurance_carrier || '—';
+  const status     = call.status || 'pending';
+  const statusColors = {
+    answered:  ['#005c2e','#e8f7ef','ANSWERED — Human Pickup'],
+    voicemail: ['#7a4a00','#fdf3e0','VOICEMAIL LEFT'],
+    no_answer: ['#8b1a1a','#fdeaea','NO ANSWER'],
+    error:     ['#8b1a1a','#fdeaea','ERROR'],
+    calling:   ['#0a3d8f','#e8f0fc','IN PROGRESS'],
+    pending:   ['#444','#f5f5f5','PENDING'],
   };
+  const [sc, sbg, slabel] = statusColors[status] || statusColors.pending;
+  const genDate  = nowLocal();
+  const endedAt  = call.ended_at  ? new Date(call.ended_at).toLocaleString('en-US',{timeZone:'America/New_York',dateStyle:'full',timeStyle:'medium'}) + ' ET' : '—';
+  const dispAt   = call.dispatched_at ? new Date(call.dispatched_at).toLocaleString('en-US',{timeZone:'America/New_York',dateStyle:'full',timeStyle:'medium'}) + ' ET' : '—';
+  const answeredBy = call.answered_by || '—';
+  const summary  = esc(call.summary || 'No AI summary returned.');
+  const recUrl   = call.recording_url || null;
+  const callId   = call.call_id || '—';
+  const filename = `evidence-report${report.id}-${call.type}-${Date.now()}.html`;
+  const outPath  = path.join('uploads', 'calls', filename);
 
-  addColumn(leftItems, 90, 210);
-  addColumn(rightItems, 760, 210);
+  const reasonLabels = {
+    asked_to_leave:'Asked to Leave',gated:'Gated',dog:'Dog in Yard',
+    bad_address:'Bad Address',child:'Child in Property'
+  };
+  const reasonLabel = reasonLabels[report.reason] || report.reason || '—';
 
-  svg += `<text x="90" y="700" font-size="18" font-weight="700" fill="#6b7280" font-family="Arial, Helvetica, sans-serif">Summary</text>`;
-  svg += renderTextBlock(wrapPlainText(call.summary || 'No summary returned by Bland.', 105).slice(0, 10), 90, 735, 28, '#111827', 20, '400');
-  svg += `<text x="90" y="955" font-size="18" fill="#9ca3af" font-family="Arial, Helvetica, sans-serif">Generated: ${escapeXml(nowISO())}</text>`;
-  svg += `</svg>`;
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Call Evidence — ${callType} — Report #${report.id}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,Helvetica,sans-serif;background:#eef2f7;color:#0a1628;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.page{max-width:900px;margin:0 auto;background:#fff;box-shadow:0 2px 24px rgba(0,0,0,.12)}
+.hdr{background:linear-gradient(135deg,#0d1f3c,#102a50);padding:0;border-bottom:4px solid #CC0000}
+.hdr-top{display:flex;align-items:center;justify-content:space-between;padding:20px 32px 16px}
+.hdr-brand{display:flex;align-items:center;gap:12px}
+.hdr-logo{width:52px;height:52px;background:#CC0000;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#fff;letter-spacing:-1px}
+.hdr-title{font-size:22px;font-weight:900;color:#fff;letter-spacing:.3px}
+.hdr-sub{font-size:12px;color:#8a9ab8;margin-top:2px}
+.hdr-badge{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:10px 18px;text-align:right}
+.hdr-badge-label{font-size:10px;color:#8a9ab8;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.hdr-badge-val{font-size:20px;font-weight:900;color:#fff;margin-top:2px}
+.hdr-strip{background:rgba(0,0,0,.2);padding:10px 32px;display:flex;gap:24px;flex-wrap:wrap}
+.hdr-meta{font-size:11px;color:#6a7fa8}
+.hdr-meta strong{color:#a0b0c8;font-weight:700}
+.body{padding:28px 32px}
+.section{margin-bottom:22px}
+.section-title{font-size:10px;font-weight:700;color:#CC0000;letter-spacing:1.8px;text-transform:uppercase;margin-bottom:8px;padding-bottom:5px;border-bottom:1.5px solid #f0e0e0}
+.status-banner{border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:14px;border:2px solid ${sc}33}
+.status-banner .dot{width:14px;height:14px;border-radius:50%;background:${sc};flex-shrink:0}
+.status-banner .slabel{font-size:16px;font-weight:900;color:${sc}}
+.status-banner .sdesc{font-size:12px;color:#6b7fa8;margin-top:2px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.field{background:#f7f9fd;border:1px solid #dce6f0;border-radius:7px;padding:10px 14px}
+.field.full{grid-column:1/-1}
+.flbl{font-size:10px;font-weight:700;color:#6b7fa8;letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px}
+.fval{font-size:13px;font-weight:700;color:#0a1628;word-break:break-all}
+.fval.mono{font-family:monospace;font-size:11px;font-weight:400;color:#253756}
+.summary-box{background:#f4f7fc;border:1px solid #dce6f0;border-radius:8px;padding:14px 16px;font-size:13px;color:#253756;line-height:1.7}
+.rec-box{background:#f0f4fa;border:1px solid #c8d8ec;border-radius:7px;padding:11px 14px;display:flex;align-items:center;gap:10px}
+.rec-icon{width:32px;height:32px;background:#0a3d8f;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rec-label{font-size:11px;font-weight:700;color:#6b7fa8;text-transform:uppercase;letter-spacing:.8px}
+.rec-url{font-size:11px;font-family:monospace;color:#0a3d8f;word-break:break-all}
+.cert-box{background:linear-gradient(135deg,#0d1f3c,#102a50);border-radius:10px;padding:16px 20px;margin-top:20px;display:flex;align-items:flex-start;gap:14px}
+.cert-icon{width:36px;height:36px;background:#CC0000;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;color:#fff;font-weight:900}
+.cert-text{font-size:12px;color:rgba(255,255,255,.75);line-height:1.6}
+.cert-text strong{color:#fff;font-size:13px;display:block;margin-bottom:3px}
+.footer{background:#f0f4fa;border-top:2px solid #dce6f0;padding:12px 32px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.fl{font-size:11px;color:#8a9ab8}
+.fl strong{color:#0a1628;display:block;font-size:12px}
+.fr{font-size:11px;font-weight:700;color:#CC0000;text-align:right}
+.print-btn{position:fixed;bottom:18px;right:18px;background:#0a3d8f;color:#fff;border:none;padding:12px 22px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;box-shadow:0 4px 16px rgba(10,61,143,.35);z-index:999}
+.print-btn:hover{background:#1a6fff}
+@media print{.print-btn{display:none}body{background:#fff}.page{box-shadow:none;max-width:100%}}
+</style>
+</head>
+<body>
+<div class="page">
+<div class="hdr">
+  <div class="hdr-top">
+    <div class="hdr-brand">
+      <div class="hdr-logo">JBA</div>
+      <div>
+        <div class="hdr-title">Call Attempt Evidence</div>
+        <div class="hdr-sub">JBA Property Solutions — Automated Outreach Record</div>
+      </div>
+    </div>
+    <div class="hdr-badge">
+      <div class="hdr-badge-label">Report</div>
+      <div class="hdr-badge-val">#${report.id}</div>
+    </div>
+  </div>
+  <div class="hdr-strip">
+    <span class="hdr-meta"><strong>Contact Type:</strong> ${callType}</span>
+    <span class="hdr-meta"><strong>Contact:</strong> ${esc(contactName)}</span>
+    <span class="hdr-meta"><strong>Phone:</strong> ${esc(contactPhone)}</span>
+    <span class="hdr-meta"><strong>Carrier:</strong> ${esc(carrier)}</span>
+    <span class="hdr-meta"><strong>Generated:</strong> ${esc(genDate)}</span>
+  </div>
+</div>
+<div class="body">
 
-  fs.writeFileSync(outPath, svg, 'utf8');
+  <div class="status-banner" style="background:${sbg}">
+    <div class="dot"></div>
+    <div>
+      <div class="slabel">${slabel}</div>
+      <div class="sdesc">Call completed — status confirmed by Bland.ai webhook · Answered by: ${esc(answeredBy)}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Work Order Details</div>
+    <div class="grid2">
+      <div class="field full"><div class="flbl">Property Address</div><div class="fval">${esc(report.address||'—')}</div></div>
+      <div class="field"><div class="flbl">Order Number</div><div class="fval">${esc(report.order_number||'—')}</div></div>
+      <div class="field"><div class="flbl">Inspector</div><div class="fval">${esc(report.inspector_name||'—')}</div></div>
+      <div class="field"><div class="flbl">Reason for Non-Completion</div><div class="fval">${esc(reasonLabel)}</div></div>
+      <div class="field"><div class="flbl">Insurance Carrier</div><div class="fval">${esc(carrier)}</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Call Record — ${callType}</div>
+    <div class="grid2">
+      <div class="field"><div class="flbl">Contact Name</div><div class="fval">${esc(contactName)}</div></div>
+      <div class="field"><div class="flbl">Phone Number Called</div><div class="fval">${esc(contactPhone)}</div></div>
+      <div class="field"><div class="flbl">Call Initiated At (ET)</div><div class="fval">${esc(dispAt)}</div></div>
+      <div class="field"><div class="flbl">Call Ended At (ET)</div><div class="fval">${esc(endedAt)}</div></div>
+      <div class="field"><div class="flbl">Call Status</div><div class="fval" style="color:${sc};font-weight:900">${slabel}</div></div>
+      <div class="field"><div class="flbl">Answered By</div><div class="fval">${esc(answeredBy)}</div></div>
+      <div class="field full"><div class="flbl">Bland.ai Call ID</div><div class="fval mono">${esc(callId)}</div></div>
+    </div>
+  </div>
+
+  ${recUrl ? `
+  <div class="section">
+    <div class="section-title">Call Recording</div>
+    <div class="rec-box">
+      <div class="rec-icon">▶</div>
+      <div>
+        <div class="rec-label">Recording URL</div>
+        <div class="rec-url"><a href="${esc(recUrl)}" target="_blank" style="color:#0a3d8f">${esc(recUrl)}</a></div>
+      </div>
+    </div>
+  </div>` : ''}
+
+  <div class="section">
+    <div class="section-title">AI Call Summary</div>
+    <div class="summary-box">${summary}</div>
+  </div>
+
+  <div class="cert-box">
+    <div class="cert-icon">✓</div>
+    <div class="cert-text">
+      <strong>Official Certification of Call Attempt</strong>
+      This document certifies that JBA Property Solutions, acting as an authorized field inspection partner of ${esc(carrier)},
+      placed an automated notification call to the ${callType} (${esc(contactName)}) at ${esc(contactPhone)} on ${esc(dispAt)}.
+      This call was dispatched via Bland.ai (Call ID: ${esc(callId)}) as part of the non-completion follow-up process
+      for property survey order #${esc(report.order_number||'—')} at ${esc(report.address||'—')}.
+      All timestamps are in Eastern Time (ET).
+    </div>
+  </div>
+
+</div>
+<div class="footer">
+  <div class="fl"><strong>JBA Property Solutions</strong>Automated evidence document — Report #${report.id} — All times in ET</div>
+  <div class="fr">${esc(carrier)} Partner<br><span style="color:#8a9ab8;font-weight:400">Order: ${esc(report.order_number||'—')}</span></div>
+</div>
+</div>
+<button class="print-btn" onclick="window.print()">🖨 Print / Save PDF</button>
+</body>
+</html>`;
+
+  fs.writeFileSync(outPath, html, 'utf8');
   return filename;
 }
 
@@ -443,7 +579,9 @@ app.post('/api/bland/webhook', (req, res) => {
 
     if (entry) {
       Object.assign(entry, { status: mapped, answered_by, recording_url, summary: summary || '', ended_at: nowISO() });
-      rep.call_screenshot = generateCallEvidenceImage(rep, entry);
+      entry.evidence_file = generateCallEvidenceHTML(rep, entry);
+      // Keep backward-compat field pointing to last evidence
+      rep.call_screenshot = entry.evidence_file;
       rep.office_alert_text = getOfficeAlertText(rep);
       rep.office_alert_sent_at = nowISO();
       if (!rep.office_timer_started_at) rep.office_timer_started_at = rep.created_at || nowISO();
@@ -461,6 +599,23 @@ app.post('/api/bland/webhook', (req, res) => {
     console.log(`Webhook: report ${report_id} call ${call_id} → ${mapped}`);
   } catch (e) { console.error('Webhook:', e.message); }
   res.sendStatus(200);
+});
+
+// ── Evidence by call index ───────────────────────────────────
+app.get('/api/reports/:id/evidence/:callIndex', (req, res) => {
+  try {
+    const db  = readDB();
+    const rep = db.reports.find(r => r.id === Number(req.params.id));
+    if (!rep) return res.status(404).send('Report not found');
+    const idx  = Number(req.params.callIndex);
+    const call = rep.calls?.[idx];
+    if (!call) return res.status(404).send('Call not found');
+    if (!call.evidence_file) return res.status(404).send('Evidence not yet generated');
+    const filePath = path.join(__dirname, 'uploads', 'calls', call.evidence_file);
+    if (!fs.existsSync(filePath)) return res.status(404).send('Evidence file missing');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.sendFile(path.resolve(filePath));
+  } catch (e) { res.status(500).send(e.message); }
 });
 
 app.patch('/api/reports/:id/callstatus', (req, res) => {
