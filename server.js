@@ -57,6 +57,7 @@ function getFortyEightHourState(report) {
   };
 }
 
+function esc(v) { return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escapeXml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
