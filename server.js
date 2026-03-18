@@ -437,31 +437,7 @@ function blandCall({ phone, contactType, contactName, report }) {
 
     const s = situationMap[reason] || defaultScripts;
 
-    const task = isAgent ? `
-You are Anna, calling on behalf of JBA Property Solutions.
-
-When someone answers say: "Hello, my name is Anna calling from JBA Property Solutions. May I please speak with ${name}?"
-
-If they confirm, say: "${s.agentScript} If you have any questions, please call us back at ${JBA_PHONE}."
-
-If unavailable or voicemail: "Hello, this is Anna from JBA Property Solutions calling about a property survey at ${address}, order number ${orderNum}. ${s.agentScript} Please call us back at ${JBA_PHONE}. Thank you and have a great day."
-
-RULES: Always say SURVEY never inspection. Never mention Safeguard Properties. Be professional and concise.
-After the call, summarize the outcome.
-    `.trim() : `
-You are Anna, calling on behalf of JBA Property Solutions.
-
-When someone answers say: "Hello, my name is Anna calling from JBA Property Solutions. May I please speak with ${name}?"
-
-If they confirm, say: "${s.phScript} If you have any questions, please call us back at ${JBA_PHONE}."
-
-YOUR GOALS: Confirm right person, then resolve the issue — get permission, gate code, address confirmation, or schedule a date/time (Mon-Sat, 8 AM-5 PM).
-
-If unavailable or voicemail: "Hello, this is Anna from JBA Property Solutions calling about a property survey at ${address}, order number ${orderNum}. ${s.phScript} Please call us back at ${JBA_PHONE}. Thank you."
-
-RULES: Always say SURVEY never inspection. Never mention Safeguard Properties. Be professional and concise.
-After the call, summarize the outcome: access granted / appointment scheduled (date+time) / voicemail left / no answer.
-    `.trim();
+    const task = isAgent ? `You are Anna from JBA Property Solutions. Ask for ${name}. When reached say: "${s.agentScript} Questions? Call ${JBA_PHONE}." Voicemail: "Hi ${name}, Anna from JBA Property Solutions. Survey at ${address} order ${orderNum}. ${s.agentScript} Call us at ${JBA_PHONE}." Never say inspection, always say survey. Summarize outcome.`.trim() : `You are Anna from JBA Property Solutions. Ask for ${name}. When reached say: "${s.phScript} Questions? Call ${JBA_PHONE}." Goal: get permission, gate code, address, or schedule date Mon-Sat 8AM-5PM. Voicemail: "Hi ${name}, Anna from JBA Property Solutions. Survey at ${address} order ${orderNum}. ${s.phScript} Call us at ${JBA_PHONE}." Never say inspection, always say survey. Summarize outcome.`.trim();
 
     const body = JSON.stringify({
       phone_number:        phone,
@@ -489,7 +465,7 @@ After the call, summarize the outcome: access granted / appointment scheduled (d
           const p  = JSON.parse(raw);
           const id = p.call_id || p.id;
           if (res.statusCode >= 200 && res.statusCode < 300 && id) resolve(id);
-          else reject(new Error(`Bland: ${raw}`));
+          else { console.error(`Bland reject status=${res.statusCode}:`, raw); reject(new Error(`Bland: ${raw}`)); }
         } catch {
           reject(new Error(`Bland: ${raw}`));
         }
