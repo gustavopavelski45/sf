@@ -439,7 +439,7 @@ const upload = multer({
 
 const memUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
-function callOcrSpace(base64DataUrl, apiKey, engine = '2') {
+function callOcrSpace(base64DataUrl, apiKey, hostname, engine = '2') {
   return new Promise((resolve, reject) => {
     const body = new URLSearchParams({
       apikey: apiKey, base64Image: base64DataUrl,
@@ -448,7 +448,7 @@ function callOcrSpace(base64DataUrl, apiKey, engine = '2') {
     }).toString();
 
     const options = {
-      hostname: 'api.ocr.space', port: 443, path: '/parse/image', method: 'POST',
+      hostname, port: 443, path: '/parse/image', method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
     };
     const req = https.request(options, res => {
@@ -462,34 +462,36 @@ function callOcrSpace(base64DataUrl, apiKey, engine = '2') {
   });
 }
 
-// Try primary key engine 2 → primary key engine 5 → backup key engine 2 → backup key engine 5
+// PRO key uses apipro1/apipro2 endpoints; backup (free) key uses api.ocr.space
+// Attempt order: PRO dc1 eng2 → PRO dc2 eng2 → PRO dc1 eng5 → backup free eng2
 async function ocrImage(buffer, mimetype) {
   const b64 = `data:${mimetype || 'image/jpeg'};base64,${buffer.toString('base64')}`;
   const attempts = [
-    { key: OCR_API_KEY,        engine: '2' },
-    { key: OCR_API_KEY,        engine: '5' },
-    { key: OCR_API_KEY_BACKUP, engine: '2' },
-    { key: OCR_API_KEY_BACKUP, engine: '5' },
+    { key: OCR_API_KEY,        host: 'apipro1.ocr.space', engine: '2' },
+    { key: OCR_API_KEY,        host: 'apipro2.ocr.space', engine: '2' },
+    { key: OCR_API_KEY,        host: 'apipro1.ocr.space', engine: '5' },
+    { key: OCR_API_KEY_BACKUP, host: 'api.ocr.space',     engine: '2' },
+    { key: OCR_API_KEY_BACKUP, host: 'api.ocr.space',     engine: '5' },
   ];
   let lastError = null;
-  for (const { key, engine } of attempts) {
+  for (const { key, host, engine } of attempts) {
     try {
-      const result = await callOcrSpace(b64, key, engine);
+      const result = await callOcrSpace(b64, key, host, engine);
       if (result.IsErroredOnProcessing) {
         lastError = Array.isArray(result.ErrorMessage) ? result.ErrorMessage.join(' ') : result.ErrorMessage || 'OCR failed';
-        console.warn(`OCR attempt key=${key.slice(0,6)} engine=${engine} failed: ${lastError}`);
+        console.warn(`OCR attempt host=${host} engine=${engine} failed: ${lastError}`);
         continue;
       }
       const text = (result.ParsedResults || []).map(r => r.ParsedText || '').join('\n');
       if (text.trim().length > 20) {
-        console.log(`OCR success key=${key.slice(0,6)} engine=${engine} chars=${text.length}`);
+        console.log(`OCR success host=${host} engine=${engine} chars=${text.length}`);
         return text;
       }
       lastError = 'Empty OCR result';
-      console.warn(`OCR attempt key=${key.slice(0,6)} engine=${engine}: empty result`);
+      console.warn(`OCR attempt host=${host} engine=${engine}: empty result`);
     } catch(e) {
       lastError = e.message;
-      console.warn(`OCR attempt key=${key.slice(0,6)} engine=${engine} error: ${e.message}`);
+      console.warn(`OCR attempt host=${host} engine=${engine} error: ${e.message}`);
     }
   }
   throw new Error(lastError || 'All OCR attempts failed');
