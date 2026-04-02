@@ -15,7 +15,8 @@ const https   = require('https');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-const OCR_API_KEY   = process.env.OCR_API_KEY   || 'P8983M3NMKM8X'; // backup: K85989969588957;
+const OCR_API_KEY        = process.env.OCR_API_KEY        || 'P8983M3NMKM8X';
+const OCR_API_KEY_BACKUP = process.env.OCR_API_KEY_BACKUP || 'K85989969588957';
 const BLAND_API_KEY = process.env.BLAND_API_KEY  || '';
 const APP_BASE_URL  = process.env.APP_BASE_URL   || `http://localhost:${process.env.PORT || 3000}`;
 const JBA_PHONE     = process.env.JBA_PHONE || '(614) 304-3490';
@@ -438,11 +439,11 @@ const upload = multer({
 
 const memUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
-function callOcrSpace(base64DataUrl, apiKey) {
+function callOcrSpace(base64DataUrl, apiKey, engine = '2') {
   return new Promise((resolve, reject) => {
     const body = new URLSearchParams({
       apikey: apiKey, base64Image: base64DataUrl,
-      language: 'eng', OCREngine: '2',
+      language: 'eng', OCREngine: engine,
       scale: 'true', detectOrientation: 'true', isTable: 'false'
     }).toString();
 
@@ -461,12 +462,37 @@ function callOcrSpace(base64DataUrl, apiKey) {
   });
 }
 
+// Try primary key engine 2 → primary key engine 5 → backup key engine 2 → backup key engine 5
 async function ocrImage(buffer, mimetype) {
-  const b64    = `data:${mimetype || 'image/jpeg'};base64,${buffer.toString('base64')}`;
-  const result = await callOcrSpace(b64, OCR_API_KEY);
-  if (result.IsErroredOnProcessing)
-    throw new Error(Array.isArray(result.ErrorMessage) ? result.ErrorMessage.join(' ') : result.ErrorMessage || 'OCR failed');
-  return (result.ParsedResults || []).map(r => r.ParsedText || '').join('\n');
+  const b64 = `data:${mimetype || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+  const attempts = [
+    { key: OCR_API_KEY,        engine: '2' },
+    { key: OCR_API_KEY,        engine: '5' },
+    { key: OCR_API_KEY_BACKUP, engine: '2' },
+    { key: OCR_API_KEY_BACKUP, engine: '5' },
+  ];
+  let lastError = null;
+  for (const { key, engine } of attempts) {
+    try {
+      const result = await callOcrSpace(b64, key, engine);
+      if (result.IsErroredOnProcessing) {
+        lastError = Array.isArray(result.ErrorMessage) ? result.ErrorMessage.join(' ') : result.ErrorMessage || 'OCR failed';
+        console.warn(`OCR attempt key=${key.slice(0,6)} engine=${engine} failed: ${lastError}`);
+        continue;
+      }
+      const text = (result.ParsedResults || []).map(r => r.ParsedText || '').join('\n');
+      if (text.trim().length > 20) {
+        console.log(`OCR success key=${key.slice(0,6)} engine=${engine} chars=${text.length}`);
+        return text;
+      }
+      lastError = 'Empty OCR result';
+      console.warn(`OCR attempt key=${key.slice(0,6)} engine=${engine}: empty result`);
+    } catch(e) {
+      lastError = e.message;
+      console.warn(`OCR attempt key=${key.slice(0,6)} engine=${engine} error: ${e.message}`);
+    }
+  }
+  throw new Error(lastError || 'All OCR attempts failed');
 }
 
 function parseOrderDetails(rawText) {
@@ -677,6 +703,24 @@ app.post('/api/ocr', memUpload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Image file is required' });
     const rawText = await ocrImage(req.file.buffer, req.file.mimetype);
+
+    // Detect if inspector sent a screenshot of the JBA app itself instead of Safeguard
+    const isJbaAppScreenshot =
+      /ORDER SCREENSHOT.*DETAILS TAB/i.test(rawText) ||
+      /OCR Auto.Fill/i.test(rawText) ||
+      /Non.Completion Report/i.test(rawText) ||
+      (/jba\.solutions/i.test(rawText) && /IMG_\d+/i.test(rawText));
+
+    if (isJbaAppScreenshot) {
+      return res.json({
+        success: false,
+        raw_text: rawText,
+        fields: {},
+        jba_app_screenshot: true,
+        error: 'Screenshot is of the JBA app. Open Safeguard > Order Details > Details tab and screenshot that screen directly.'
+      });
+    }
+
     const fields = parseOrderDetails(rawText);
     res.json({ success: true, raw_text: rawText, fields });
   } catch (err) {

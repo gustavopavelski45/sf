@@ -653,8 +653,22 @@ async function runOCR(file) {
 
     const fields = json.fields || {};
     const rawText = json.raw_text || '';
-    // Debug: log raw OCR text so issues can be diagnosed
     if (rawText) console.log('[OCR raw_text]', rawText);
+
+    // Inspector sent a screenshot of the JBA app itself instead of Safeguard
+    if (json.jba_app_screenshot) {
+      setOcrBox(`<div class="ocr-row"><i class="bi bi-phone-fill" style="color:var(--accent)"></i>
+        <span><strong>Screenshot errado.</strong> Você fotografou a tela do app JBA, não o Safeguard.</span></div>
+        <div style="margin-top:8px;font-size:12px;line-height:1.6;color:var(--gray-600);">
+          <strong>Como fazer certo:</strong><br>
+          1. Abra o app <strong>Safeguard Properties</strong><br>
+          2. Vá em <strong>Order Details → aba Details</strong><br>
+          3. Tire o screenshot <em>dessa tela</em> e envie aqui
+        </div>
+        <button style="margin-top:8px;padding:4px 10px;background:transparent;border:1px solid currentColor;border-radius:4px;font-size:11px;cursor:pointer;" onclick="document.getElementById('screenshotInput').click()">
+        <i class="bi bi-arrow-repeat"></i> Try another image</button>`, 'error');
+      return;
+    }
 
     let count = 0;
     for (const [key, elId] of Object.entries(FIELD_MAP)) {
@@ -670,15 +684,13 @@ async function runOCR(file) {
         <button style="margin-top:6px;padding:4px 10px;background:transparent;border:1px solid currentColor;border-radius:4px;font-size:11px;cursor:pointer;" onclick="document.getElementById('screenshotInput').click()">
         <i class="bi bi-arrow-repeat"></i> Try another image</button>`, 'warn');
     } else if (rawText.length > 30) {
-      // OCR got text but parser couldn't extract fields — show partial warning instead of hard error
-      // Pre-fill address field with raw text hint if it looks like an address
       const addrHint = rawText.split('\n').find(l => /^\d+\s+[A-Z]/.test(l.trim()));
       if (addrHint) {
         const el = document.getElementById('fieldAddress');
         if (!el.value) { el.value = addrHint.trim(); el.classList.add('autofilled'); count++; }
       }
       setOcrBox(`<div class="ocr-row"><i class="bi bi-exclamation-circle-fill" style="color:var(--accent)"></i>
-        <span><strong>OCR read the image but couldn't parse fields.</strong> Check the Details tab is selected — or fill manually.</span></div>
+        <span><strong>OCR leu a imagem mas não encontrou os campos.</strong> Verifique se a aba Details está selecionada.</span></div>
         <button style="margin-top:6px;padding:4px 10px;background:transparent;border:1px solid currentColor;border-radius:4px;font-size:11px;cursor:pointer;" onclick="document.getElementById('screenshotInput').click()">
         <i class="bi bi-arrow-repeat"></i> Try another image</button>`, 'warn');
     } else {
