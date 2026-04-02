@@ -646,12 +646,16 @@ async function runOCR(file) {
     if (!resp.ok) throw new Error(json.error || `Server error ${resp.status}`);
 
     const fields = json.fields || {};
+    const rawText = json.raw_text || '';
+    // Debug: log raw OCR text so issues can be diagnosed
+    if (rawText) console.log('[OCR raw_text]', rawText);
+
     let count = 0;
     for (const [key, elId] of Object.entries(FIELD_MAP)) {
       if (fields[key]) { const el = document.getElementById(elId); el.value = fields[key]; el.classList.add('autofilled'); count++; }
     }
 
-    if (count >= 4) {
+    if (count >= 3) {
       setOcrBox(`<div class="ocr-row"><i class="bi bi-check-circle-fill" style="color:var(--green)"></i>
         <span><strong>${count} fields auto-filled.</strong> Review and correct if needed.</span></div>`, 'success');
     } else if (count > 0) {
@@ -659,9 +663,21 @@ async function runOCR(file) {
         <span><strong>${count} field(s) detected.</strong> Fill the rest manually.</span></div>
         <button style="margin-top:6px;padding:4px 10px;background:transparent;border:1px solid currentColor;border-radius:4px;font-size:11px;cursor:pointer;" onclick="document.getElementById('screenshotInput').click()">
         <i class="bi bi-arrow-repeat"></i> Try another image</button>`, 'warn');
+    } else if (rawText.length > 30) {
+      // OCR got text but parser couldn't extract fields — show partial warning instead of hard error
+      // Pre-fill address field with raw text hint if it looks like an address
+      const addrHint = rawText.split('\n').find(l => /^\d+\s+[A-Z]/.test(l.trim()));
+      if (addrHint) {
+        const el = document.getElementById('fieldAddress');
+        if (!el.value) { el.value = addrHint.trim(); el.classList.add('autofilled'); count++; }
+      }
+      setOcrBox(`<div class="ocr-row"><i class="bi bi-exclamation-circle-fill" style="color:var(--accent)"></i>
+        <span><strong>OCR read the image but couldn't parse fields.</strong> Check the Details tab is selected — or fill manually.</span></div>
+        <button style="margin-top:6px;padding:4px 10px;background:transparent;border:1px solid currentColor;border-radius:4px;font-size:11px;cursor:pointer;" onclick="document.getElementById('screenshotInput').click()">
+        <i class="bi bi-arrow-repeat"></i> Try another image</button>`, 'warn');
     } else {
       setOcrBox(`<div class="ocr-row"><i class="bi bi-x-circle-fill" style="color:var(--red)"></i>
-        <span><strong>Could not read data.</strong> Make sure the Details tab is visible.</span></div>
+        <span><strong>Could not read data.</strong> Make sure the Details tab is visible — then try again.</span></div>
         <button style="margin-top:6px;padding:4px 10px;background:transparent;border:1px solid currentColor;border-radius:4px;font-size:11px;cursor:pointer;" onclick="document.getElementById('screenshotInput').click()">
         <i class="bi bi-arrow-repeat"></i> Try another image</button>`, 'error');
     }

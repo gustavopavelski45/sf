@@ -469,34 +469,123 @@ async function ocrImage(buffer, mimetype) {
   return (result.ParsedResults || []).map(r => r.ParsedText || '').join('\n');
 }
 
-const ROAD_KW = 'RD|AVE|ST|HWY|BLVD|DR|LN|CT|WAY|PL|TER|PKWY|CIR|LOOP|TRAIL|SWAIM';
+const ROAD_KW = 'RD|AVE|ST|HWY|BLVD|DR|LN|CT|WAY|PL|TER|PKWY|CIR|LOOP|TRAIL|SWAIM|PIKE|ROAD|STREET|AVENUE|DRIVE|COURT|PLACE|LANE|BOULEVARD|HIGHWAY';
 
 function parseOrderDetails(rawText) {
   const f = {};
-  const om = rawText.match(/\b(3\d{8})\b/);
-  if (om) f.order_number = om[1];
-  const dates = [...rawText.matchAll(/\b(\d{2}\/\d{2}\/20\d{2})\b/g)].map(m => m[1]);
+
+  // Normalize: collapse excessive whitespace but keep newlines for multi-line parsing
+  const text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  // ── Order Number: Safeguard uses 9-digit numbers starting with 3 ──
+  const onM = text.match(/\b(3\d{8})\b/);
+  if (onM) f.order_number = onM[1];
+  // Also try labeled match
+  if (!f.order_number) {
+    const onL = text.match(/Order\s*(?:Number|#|Num)[\s\t:]*(\d{7,10})/i);
+    if (onL) f.order_number = onL[1];
+  }
+
+  // ── Dates: MM/DD/YYYY ──
+  const dates = [...text.matchAll(/\b(\d{2}\/\d{2}\/20\d{2})\b/g)].map(m => m[1]);
   if (dates[0]) f.due_date = dates[0];
-  const lbs = [...rawText.matchAll(/(?<!\d)(\d{4,5})(?!\d)/g)]
-    .map(m => m[1])
-    .filter(n => !dates.some(d => d.replace(/\//g, '').includes(n)))
-    .filter(n => !f.order_number || !f.order_number.includes(n));
-  if (lbs[0]) f.lockbox_code = lbs[0];
-  const addrRe = new RegExp(`(\\d+\\s+[A-Z0-9 ]+(${ROAD_KW})[,\\s\\n]+[A-Z ]+,?\\s+[A-Z]{2}\\s+\\d{5})`, 'im');
-  const am = rawText.match(addrRe);
-  if (am) f.address = am[1].replace(/\s+/g, ' ').replace(/\s*,\s*/g, ', ').trim();
-  const pairs = [
-    [/Work\s*Code[\s\t:]+([A-Z][A-Z0-9]{1,7})/i,       'work_code'   ],
-    [/Client[\s\t:]+([A-Z0-9]{2,12})/i,                 'client'      ],
-    [/Lockbox\s*Code[\s\t:]+(\d{4,6})/i,               'lockbox_code'],
-    [/\bName[\s\t:]+([A-Z][A-Z ]{3,})/i,               'name'        ],
-    [/Order\s*Number[\s\t:]+(\d{8,10})/i,             'order_number'],
-    [/Due\s*Date[\s\t:]+(\d{2}\/\d{2}\/\d{4})/i,   'due_date'    ],
+  // Labeled due date takes priority
+  const ddL = text.match(/Due\s*Date[\s\t:]*(\d{2}\/\d{2}\/\d{4})/i);
+  if (ddL) f.due_date = ddL[1];
+
+  // ── Lockbox: 4-5 digit standalone number ──
+  const lockM = text.match(/Lockbox\s*(?:Code)?[\s\t:]*(\d{4,5})/i);
+  if (lockM) {
+    f.lockbox_code = lockM[1];
+  } else {
+    // standalone 4-digit numbers not part of order number or zip
+    const nums = [...text.matchAll(/(?<!\d)(\d{4,5})(?!\d)/g)]
+      .map(m => m[1])
+      .filter(n => !dates.some(d => d.replace(/\//g,'').includes(n)))
+      .filter(n => !f.order_number || !f.order_number.includes(n))
+      .filter(n => !/^\d{5}$/.test(n) || parseInt(n) < 9000); // skip obvious zips
+    if (nums[0]) f.lockbox_code = nums[0];
+  }
+
+  // ── Address: multi-strategy ──
+  // Strategy 1: labeled "Address" line — value may be on same line or next 1-2 lines
+  const addrLabelIdx = lines.findIndex(l => /^Address[\s:]*$/i.test(l) || /^Address[\s:]+\d/i.test(l));
+  if (addrLabelIdx !== -1) {
+    const addrLine = /^Address[\s:]+\d/i.test(lines[addrLabelIdx])
+      ? lines[addrLabelIdx].replace(/^Address[\s:]*/i, '').trim()
+      : lines[addrLabelIdx + 1] || '';
+    // Address often spans 2 lines: "2114 COTTAGE SAN RD" + "SILVER CITY, NM 88061"
+    const nextLine = lines[addrLabelIdx + (addrLine ? 1 : 2)] || '';
+    const combined = [addrLine, nextLine].filter(Boolean).join(', ');
+    if (/\d/.test(addrLine)) {
+      f.address = combined.replace(/\s*,\s*/g, ', ').replace(/\s{2,}/g, ' ').trim();
+    }
+  }
+
+  // Strategy 2: regex pattern — number + street name + road suffix + city/state/zip
+  if (!f.address) {
+    const ROAD_RE = new RegExp(
+      `(\\d+\\s[A-Z0-9 ]+(${ROAD_KW})[,\\s\\n]+[A-Z][A-Z ,]+[A-Z]{2}\\s+\\d{5})`,
+      'im'
+    );
+    const am = text.match(ROAD_RE);
+    if (am) f.address = am[1].replace(/\s+/g, ' ').replace(/\s*,\s*/g, ', ').trim();
+  }
+
+  // Strategy 3: scan lines for "NUMBER STREET_NAME SUFFIX" pattern
+  if (!f.address) {
+    const SUFFIX_RE = new RegExp(`\\b(${ROAD_KW})\\b`, 'i');
+    for (let i = 0; i < lines.length; i++) {
+      if (/^\d+\s+[A-Z]/.test(lines[i]) && SUFFIX_RE.test(lines[i])) {
+        // Check if next line looks like "CITY, ST ZIP"
+        const nextL = lines[i + 1] || '';
+        if (/[A-Z]{2}\s+\d{5}/.test(nextL) || /,\s*[A-Z]{2}/.test(nextL)) {
+          f.address = `${lines[i]}, ${nextL}`.replace(/\s{2,}/g, ' ').trim();
+        } else {
+          f.address = lines[i];
+        }
+        break;
+      }
+    }
+  }
+
+  // ── Labeled pairs — scan line-by-line for "Label ... Value" ──
+  // Safeguard mobile renders two-column: label on left, value on right (OCR may put on same line or adjacent)
+  const labelMap = [
+    { keys: ['work code', 'workcode'],       field: 'work_code'    },
+    { keys: ['client'],                       field: 'client'       },
+    { keys: ['lockbox code', 'lockbox'],      field: 'lockbox_code' },
+    { keys: ['name'],                         field: 'name'         },
+    { keys: ['order number', 'order#'],       field: 'order_number' },
+    { keys: ['due date'],                     field: 'due_date'     },
   ];
-  for (const [rx, key] of pairs) {
-    const m = rawText.match(rx);
+
+  // Full-text labeled regex pass (handles "Label: Value" on same line)
+  const pairsRe = [
+    [/Work\s*Code[\s\t:]+([A-Z][A-Z0-9]{1,9})/i,           'work_code'   ],
+    [/Client[\s\t:]+([A-Z][A-Z0-9]{1,12})/i,               'client'      ],
+    [/Lockbox\s*(?:Code)?[\s\t:]+(\d{3,6})/i,              'lockbox_code'],
+    [/\bName[\s\t:]+([A-Z][A-Z '.-]{2,30})/i,              'name'        ],
+    [/Order\s*(?:Number|#|Num)[\s\t:]+(\d{7,10})/i,        'order_number'],
+    [/Due\s*Date[\s\t:]+(\d{2}\/\d{2}\/\d{4})/i,           'due_date'    ],
+  ];
+  for (const [rx, key] of pairsRe) {
+    const m = text.match(rx);
     if (m && !f[key]) f[key] = m[1].trim();
   }
+
+  // Line-by-line: label on one line, value on next
+  for (let i = 0; i < lines.length; i++) {
+    const lo = lines[i].toLowerCase();
+    for (const { keys, field } of labelMap) {
+      if (!f[field] && keys.some(k => lo === k || lo.startsWith(k + ' ') || lo.startsWith(k + ':'))) {
+        const val = (lines[i].replace(new RegExp(keys[0], 'i'), '').replace(/^[\s:]+/, '').trim()) || lines[i + 1] || '';
+        if (val && val.length > 1 && val.length < 40) f[field] = val.trim();
+      }
+    }
+  }
+
   return f;
 }
 
