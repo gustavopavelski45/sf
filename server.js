@@ -15,7 +15,7 @@ const https   = require('https');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-const OCR_API_KEY   = process.env.OCR_API_KEY   || 'K85989969588957';
+const OCR_API_KEY   = process.env.OCR_API_KEY   || 'P8983M3NMKM8X';
 const BLAND_API_KEY = process.env.BLAND_API_KEY  || '';
 const APP_BASE_URL  = process.env.APP_BASE_URL   || `http://localhost:${process.env.PORT || 3000}`;
 const JBA_PHONE     = process.env.JBA_PHONE || '(614) 304-3490';
