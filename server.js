@@ -15,7 +15,7 @@ const https   = require('https');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-const OCR_API_KEY   = process.env.OCR_API_KEY   || 'P8983M3NMKM8X';
+const OCR_API_KEY   = process.env.OCR_API_KEY   || 'P8983M3NMKM8X'; // backup: K85989969588957;
 const BLAND_API_KEY = process.env.BLAND_API_KEY  || '';
 const APP_BASE_URL  = process.env.APP_BASE_URL   || `http://localhost:${process.env.PORT || 3000}`;
 const JBA_PHONE     = process.env.JBA_PHONE || '(614) 304-3490';
@@ -469,119 +469,81 @@ async function ocrImage(buffer, mimetype) {
   return (result.ParsedResults || []).map(r => r.ParsedText || '').join('\n');
 }
 
-const ROAD_KW = 'RD|AVE|ST|HWY|BLVD|DR|LN|CT|WAY|PL|TER|PKWY|CIR|LOOP|TRAIL|SWAIM|PIKE|ROAD|STREET|AVENUE|DRIVE|COURT|PLACE|LANE|BOULEVARD|HIGHWAY';
-
 function parseOrderDetails(rawText) {
   const f = {};
 
-  // Normalize: collapse excessive whitespace but keep newlines for multi-line parsing
-  const text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  // Normalize line endings and split into clean lines
+  // Safeguard Details tab: label alone on one line, value on the next line(s)
+  const lines = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    .split('\n').map(l => l.trim()).filter(Boolean);
+  const text = lines.join('\n');
 
-  // ── Order Number: Safeguard uses 9-digit numbers starting with 3 ──
-  const onM = text.match(/\b(3\d{8})\b/);
-  if (onM) f.order_number = onM[1];
-  // Also try labeled match
-  if (!f.order_number) {
-    const onL = text.match(/Order\s*(?:Number|#|Num)[\s\t:]*(\d{7,10})/i);
-    if (onL) f.order_number = onL[1];
-  }
+  // ── Primary: line-by-line label scan (exact match, label alone on its line) ──
+  const labelMap = [
+    { key: 'address',      field: 'address',      multiline: true  },
+    { key: 'work code',    field: 'work_code',    multiline: false },
+    { key: 'client',       field: 'client',       multiline: false },
+    { key: 'due date',     field: 'due_date',     multiline: false },
+    { key: 'lockbox code', field: 'lockbox_code', multiline: false },
+    { key: 'name',         field: 'name',         multiline: false },
+    { key: 'order number', field: 'order_number', multiline: false },
+  ];
 
-  // ── Dates: MM/DD/YYYY ──
-  const dates = [...text.matchAll(/\b(\d{2}\/\d{2}\/20\d{2})\b/g)].map(m => m[1]);
-  if (dates[0]) f.due_date = dates[0];
-  // Labeled due date takes priority
-  const ddL = text.match(/Due\s*Date[\s\t:]*(\d{2}\/\d{2}\/\d{4})/i);
-  if (ddL) f.due_date = ddL[1];
-
-  // ── Lockbox: 4-5 digit standalone number ──
-  const lockM = text.match(/Lockbox\s*(?:Code)?[\s\t:]*(\d{4,5})/i);
-  if (lockM) {
-    f.lockbox_code = lockM[1];
-  } else {
-    // standalone 4-digit numbers not part of order number or zip
-    const nums = [...text.matchAll(/(?<!\d)(\d{4,5})(?!\d)/g)]
-      .map(m => m[1])
-      .filter(n => !dates.some(d => d.replace(/\//g,'').includes(n)))
-      .filter(n => !f.order_number || !f.order_number.includes(n))
-      .filter(n => !/^\d{5}$/.test(n) || parseInt(n) < 9000); // skip obvious zips
-    if (nums[0]) f.lockbox_code = nums[0];
-  }
-
-  // ── Address: multi-strategy ──
-  // Strategy 1: labeled "Address" line — value may be on same line or next 1-2 lines
-  const addrLabelIdx = lines.findIndex(l => /^Address[\s:]*$/i.test(l) || /^Address[\s:]+\d/i.test(l));
-  if (addrLabelIdx !== -1) {
-    const addrLine = /^Address[\s:]+\d/i.test(lines[addrLabelIdx])
-      ? lines[addrLabelIdx].replace(/^Address[\s:]*/i, '').trim()
-      : lines[addrLabelIdx + 1] || '';
-    // Address often spans 2 lines: "2114 COTTAGE SAN RD" + "SILVER CITY, NM 88061"
-    const nextLine = lines[addrLabelIdx + (addrLine ? 1 : 2)] || '';
-    const combined = [addrLine, nextLine].filter(Boolean).join(', ');
-    if (/\d/.test(addrLine)) {
-      f.address = combined.replace(/\s*,\s*/g, ', ').replace(/\s{2,}/g, ' ').trim();
-    }
-  }
-
-  // Strategy 2: regex pattern — number + street name + road suffix + city/state/zip
-  if (!f.address) {
-    const ROAD_RE = new RegExp(
-      `(\\d+\\s[A-Z0-9 ]+(${ROAD_KW})[,\\s\\n]+[A-Z][A-Z ,]+[A-Z]{2}\\s+\\d{5})`,
-      'im'
-    );
-    const am = text.match(ROAD_RE);
-    if (am) f.address = am[1].replace(/\s+/g, ' ').replace(/\s*,\s*/g, ', ').trim();
-  }
-
-  // Strategy 3: scan lines for "NUMBER STREET_NAME SUFFIX" pattern
-  if (!f.address) {
-    const SUFFIX_RE = new RegExp(`\\b(${ROAD_KW})\\b`, 'i');
-    for (let i = 0; i < lines.length; i++) {
-      if (/^\d+\s+[A-Z]/.test(lines[i]) && SUFFIX_RE.test(lines[i])) {
-        // Check if next line looks like "CITY, ST ZIP"
-        const nextL = lines[i + 1] || '';
-        if (/[A-Z]{2}\s+\d{5}/.test(nextL) || /,\s*[A-Z]{2}/.test(nextL)) {
-          f.address = `${lines[i]}, ${nextL}`.replace(/\s{2,}/g, ' ').trim();
-        } else {
-          f.address = lines[i];
-        }
-        break;
+  for (let i = 0; i < lines.length; i++) {
+    const lo = lines[i].toLowerCase();
+    for (const { key, field } of labelMap) {
+      if (f[field]) continue;
+      if (lo !== key) continue;
+      const val1 = lines[i + 1] || '';
+      const val2 = lines[i + 2] || '';
+      if (field === 'address') {
+        // Street line + City/State/ZIP line
+        const cityRe = /[A-Z]{2}\s+\d{5}|,\s*[A-Z]{2}/;
+        f.address = (val1 && cityRe.test(val2))
+          ? `${val1}, ${val2}`.replace(/\s{2,}/g, ' ').trim()
+          : val1.trim();
+      } else {
+        if (val1 && val1.length > 0 && val1.length < 60) f[field] = val1.trim();
       }
     }
   }
 
-  // ── Labeled pairs — scan line-by-line for "Label ... Value" ──
-  // Safeguard mobile renders two-column: label on left, value on right (OCR may put on same line or adjacent)
-  const labelMap = [
-    { keys: ['work code', 'workcode'],       field: 'work_code'    },
-    { keys: ['client'],                       field: 'client'       },
-    { keys: ['lockbox code', 'lockbox'],      field: 'lockbox_code' },
-    { keys: ['name'],                         field: 'name'         },
-    { keys: ['order number', 'order#'],       field: 'order_number' },
-    { keys: ['due date'],                     field: 'due_date'     },
-  ];
-
-  // Full-text labeled regex pass (handles "Label: Value" on same line)
-  const pairsRe = [
-    [/Work\s*Code[\s\t:]+([A-Z][A-Z0-9]{1,9})/i,           'work_code'   ],
-    [/Client[\s\t:]+([A-Z][A-Z0-9]{1,12})/i,               'client'      ],
-    [/Lockbox\s*(?:Code)?[\s\t:]+(\d{3,6})/i,              'lockbox_code'],
-    [/\bName[\s\t:]+([A-Z][A-Z '.-]{2,30})/i,              'name'        ],
-    [/Order\s*(?:Number|#|Num)[\s\t:]+(\d{7,10})/i,        'order_number'],
-    [/Due\s*Date[\s\t:]+(\d{2}\/\d{2}\/\d{4})/i,           'due_date'    ],
-  ];
-  for (const [rx, key] of pairsRe) {
-    const m = text.match(rx);
-    if (m && !f[key]) f[key] = m[1].trim();
+  // ── Fallback: regex (handles OCR collapsing label+value on same line) ──
+  if (!f.order_number) {
+    const m = text.match(/Order\s*Number[\s\t:]*(\d{7,10})/i) || text.match(/\b(3\d{8})\b/);
+    if (m) f.order_number = m[1];
   }
-
-  // Line-by-line: label on one line, value on next
-  for (let i = 0; i < lines.length; i++) {
-    const lo = lines[i].toLowerCase();
-    for (const { keys, field } of labelMap) {
-      if (!f[field] && keys.some(k => lo === k || lo.startsWith(k + ' ') || lo.startsWith(k + ':'))) {
-        const val = (lines[i].replace(new RegExp(keys[0], 'i'), '').replace(/^[\s:]+/, '').trim()) || lines[i + 1] || '';
-        if (val && val.length > 1 && val.length < 40) f[field] = val.trim();
+  if (!f.due_date) {
+    const m = text.match(/Due\s*Date[\s\t:]*(\d{2}\/\d{2}\/\d{4})/i)
+           || text.match(/\b(\d{2}\/\d{2}\/20\d{2})\b/);
+    if (m) f.due_date = m[1];
+  }
+  if (!f.lockbox_code) {
+    const m = text.match(/Lockbox\s*(?:Code)?[\s\t:]*(\d{3,6})/i);
+    if (m) f.lockbox_code = m[1];
+  }
+  if (!f.work_code) {
+    const m = text.match(/Work\s*Code[\s\t:]*([A-Z][A-Z0-9]{1,9})/i);
+    if (m) f.work_code = m[1];
+  }
+  if (!f.client) {
+    const m = text.match(/Client[\s\t:]*([A-Z][A-Z0-9]{1,12})/i);
+    if (m) f.client = m[1];
+  }
+  if (!f.name) {
+    const m = text.match(/\bName[\s\t:]*([A-Z][A-Z \'.-]{2,30})/i);
+    if (m) f.name = m[1].trim();
+  }
+  if (!f.address) {
+    // Last resort: find line starting with house number + known road suffix
+    const SUFFIX_RE = /\b(RD|AVE|ST|HWY|BLVD|DR|LN|CT|WAY|PL|TER|PKWY|CIR|LOOP|TRAIL|PIKE|ROAD|STREET|AVENUE|DRIVE|COURT|LANE|BOULEVARD)\b/i;
+    for (let i = 0; i < lines.length; i++) {
+      if (/^\d+\s+[A-Z]/i.test(lines[i]) && SUFFIX_RE.test(lines[i])) {
+        const nextL = lines[i + 1] || '';
+        f.address = /[A-Z]{2}\s+\d{5}|,\s*[A-Z]{2}/.test(nextL)
+          ? `${lines[i]}, ${nextL}`.trim()
+          : lines[i].trim();
+        break;
       }
     }
   }
@@ -653,6 +615,10 @@ function blandCall({ phone, contactType, contactName, report }) {
       child: {
         agentScript: 'Our inspector arrived on site, but only a child was present at the property. For safety and compliance reasons, we were unable to proceed. Could you please assist in coordinating a better time when an adult will be present?',
         phScript:    'Our inspector visited today, but only a child was present at the property. For safety reasons, we need to return when an adult is available. Please let us know a convenient date and time. The survey is exterior only and takes just a few minutes.',
+      },
+      no_trespassing: {
+        agentScript: 'Our inspector arrived on site but could not enter because there is a "No Trespassing" sign posted on the property. Could you please confirm whether access is permitted and help coordinate with the client so the survey can be completed?',
+        phScript:    'Our inspector was on site today but could not enter because a "No Trespassing" sign is posted at the property. Could you please confirm whether we have permission to access the property for a brief exterior survey? It only takes a few minutes.',
       },
     };
 
@@ -838,6 +804,23 @@ app.patch('/api/reports/:id/callstatus', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.patch('/api/reports/:id/ph-outcome', (req, res) => {
+  try {
+    const db  = readDB();
+    const rep = db.reports.find(r => r.id === Number(req.params.id));
+    if (!rep) return res.status(404).json({ error: 'Not found' });
+    if (!rep.ph_outcome) rep.ph_outcome = {};
+    const { field, toggle, outcome_notes } = req.body;
+    if (toggle && field) {
+      rep.ph_outcome[field] = !rep.ph_outcome[field];
+      rep.ph_outcome[field + '_at'] = rep.ph_outcome[field] ? nowISO() : null;
+    }
+    if (outcome_notes !== undefined) rep.ph_outcome.outcome_notes = outcome_notes;
+    writeDB(db);
+    res.json({ success: true, ph_outcome: rep.ph_outcome });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/submit',
   upload.fields([
     { name: 'order_screenshot',    maxCount: 1 },
@@ -984,11 +967,12 @@ app.get('/api/stats', (_req, res) => {
     const reports = readDB().reports;
     res.json({
       totalReports: reports.length,
-      badAddress:   reports.filter(r => r.reason === 'bad_address').length,
-      askedLeave:   reports.filter(r => r.reason === 'asked_to_leave').length,
-      gated:        reports.filter(r => r.reason === 'gated').length,
-      dog:          reports.filter(r => r.reason === 'dog').length,
-      child:        reports.filter(r => r.reason === 'child').length,
+      badAddress:    reports.filter(r => r.reason === 'bad_address').length,
+      askedLeave:    reports.filter(r => r.reason === 'asked_to_leave').length,
+      gated:         reports.filter(r => r.reason === 'gated').length,
+      dog:           reports.filter(r => r.reason === 'dog').length,
+      child:         reports.filter(r => r.reason === 'child').length,
+      noTrespassing: reports.filter(r => r.reason === 'no_trespassing').length,
       callPending: reports.filter(r => !r.call_status || r.call_status === 'pending').length,
       callActive:  reports.filter(r => r.call_status === 'calling').length,
       callDone:    reports.filter(r => ['answered','voicemail','no_answer'].includes(r.call_status)).length,

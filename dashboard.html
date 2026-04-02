@@ -97,6 +97,7 @@
         <option value="dog">Dog in Yard</option>
         <option value="bad_address">Bad Address</option>
         <option value="child">Child in Property</option>
+        <option value="no_trespassing">No Trespassing</option>
       </select>
     </div>
     <div class="filter-group">
@@ -171,11 +172,12 @@
 
 <script>
 const REASONS = {
-  asked_to_leave: { label: 'Asked to Leave', cls: 'badge-leave',  icon: 'bi-person-x-fill'           },
-  gated:          { label: 'Gated',          cls: 'badge-gated',  icon: 'bi-lock-fill'               },
-  dog:            { label: 'Dog in Yard',    cls: 'badge-dog',    icon: 'bi-exclamation-triangle-fill'},
-  bad_address:    { label: 'Bad Address',    cls: 'badge-bad',    icon: 'bi-geo-alt-fill'            },
-  child:          { label: 'Child in Prop.', cls: 'badge-child',  icon: 'bi-emoji-smile-fill'        },
+  asked_to_leave:  { label: 'Asked to Leave',   cls: 'badge-leave',  icon: 'bi-person-x-fill'           },
+  gated:           { label: 'Gated',             cls: 'badge-gated',  icon: 'bi-lock-fill'               },
+  dog:             { label: 'Dog in Yard',       cls: 'badge-dog',    icon: 'bi-exclamation-triangle-fill'},
+  bad_address:     { label: 'Bad Address',       cls: 'badge-bad',    icon: 'bi-geo-alt-fill'            },
+  child:           { label: 'Child in Prop.',    cls: 'badge-child',  icon: 'bi-emoji-smile-fill'        },
+  no_trespassing:  { label: 'No Trespassing',    cls: 'badge-notres', icon: 'bi-sign-stop-fill'          },
 };
 
 const CALL_STATUS = {
@@ -415,6 +417,42 @@ async function openDetail(id) {
       </div>`;
     }
 
+    // ── PH Outcome Panel ─────────────────────────────────────
+    const phOut = r.ph_outcome || {};
+    function outcomeBtn(field, icon, label, activeColor) {
+      const active = !!phOut[field];
+      const ts = phOut[field + '_at']
+        ? `<div style="font-size:9px;color:${active?'rgba(255,255,255,.7)':'var(--gray-400)'};margin-top:2px;">${new Date(phOut[field+'_at']).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>`
+        : '';
+      return `<button
+        onclick="event.stopPropagation(); togglePhOutcome(${r.id},'${field}')"
+        style="flex:1;min-width:110px;padding:10px 8px;border-radius:10px;border:2px solid ${active ? activeColor : 'var(--gray-200)'};background:${active ? activeColor : '#fff'};color:${active ? '#fff' : 'var(--gray-600)'};font-size:12px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;transition:all .15s;">
+        <i class="bi ${icon}" style="font-size:18px;"></i>
+        ${label}
+        ${ts}
+      </button>`;
+    }
+    const phOutcomePanel = `<div class="notes-box" style="background:#f0fdf4;border-color:#86efac;margin-bottom:10px;">
+      <div class="notes-label" style="color:#166534;"><i class="bi bi-person-check-fill"></i> PH Outcome — Office Action</div>
+      <div style="font-size:11px;color:#4b7a5e;margin-bottom:10px;">Mark what happened after contact with Policy Holder:</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${outcomeBtn('ph_aware',        'bi-person-fill-check',  'PH Aware',       '#0d9488')}
+        ${outcomeBtn('appointment_set', 'bi-calendar-check-fill','Appointment Set', '#1d4ed8')}
+        ${outcomeBtn('back_on_route',   'bi-arrow-repeat',       'Back on Route',   '#7c3aed')}
+      </div>
+      ${phOut.outcome_notes ? `<div style="margin-top:10px;font-size:12px;color:#374151;background:#fff;border:1px solid #d1fae5;border-radius:7px;padding:8px 12px;"><i class="bi bi-chat-text" style="margin-right:5px;color:#059669;"></i>${esc(phOut.outcome_notes)}</div>` : ''}
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+        <input id="outcomeNotesInput_${r.id}" type="text" placeholder="Notes (optional)…"
+          value="${esc(phOut.outcome_notes||'')}"
+          style="flex:1;padding:7px 10px;border-radius:7px;border:1px solid var(--gray-200);font-size:12px;font-family:var(--sans);"
+          onkeydown="if(event.key==='Enter'){event.stopPropagation();saveOutcomeNotes(${r.id});}" />
+        <button onclick="event.stopPropagation();saveOutcomeNotes(${r.id})"
+          style="padding:7px 14px;background:var(--navy);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">
+          <i class="bi bi-floppy"></i> Save
+        </button>
+      </div>
+    </div>`;
+
     const officeAlert = r.office_alert_text
       ? `<div class="notes-box" style="background:#fff7ed;border-color:#fdba74;">
           <div class="notes-label"><i class="bi bi-bell-fill"></i> Office Alert</div>${esc(r.office_alert_text)}
@@ -447,6 +485,7 @@ async function openDetail(id) {
         ${slaBadge(timer)}
       </div>
       ${timerPanel}
+      ${phOutcomePanel}
       ${officeAlert}
       <div class="detail-grid">
         ${dF('Property Address', r.address, true)}
@@ -531,6 +570,36 @@ function photoTile(src, label) {
     <div class="photo-tile-lbl">${label}</div>
     <a href="/${src}" target="_blank"><img src="/${src}" loading="lazy" /></a>
   </div>`;
+}
+
+async function togglePhOutcome(id, field) {
+  try {
+    const resp = await fetch(`/api/reports/${id}/ph-outcome`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field, toggle: true })
+    });
+    const json = await resp.json();
+    if (!resp.ok) throw new Error(json.error || 'Failed');
+    await loadReports();
+    if (currentId === id) openDetail(id);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveOutcomeNotes(id) {
+  const inp = document.getElementById(`outcomeNotesInput_${id}`);
+  if (!inp) return;
+  try {
+    const resp = await fetch(`/api/reports/${id}/ph-outcome`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outcome_notes: inp.value.trim() })
+    });
+    const json = await resp.json();
+    if (!resp.ok) throw new Error(json.error || 'Failed');
+    toast('Notes saved.', 'success');
+    if (currentId === id) openDetail(id);
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); currentId = null; }
