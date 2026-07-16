@@ -20,6 +20,7 @@ const OCR_API_KEY_BACKUP = process.env.OCR_API_KEY_BACKUP || 'K85989969588957';
 const BLAND_API_KEY = process.env.BLAND_API_KEY  || '';
 const APP_BASE_URL  = process.env.APP_BASE_URL   || `http://localhost:${process.env.PORT || 3000}`;
 const JBA_PHONE     = process.env.JBA_PHONE || '(614) 304-3490';
+const BOT_SUBMIT_KEY = process.env.BOT_SUBMIT_KEY || ''; // chave p/ o WhatsApp da Anna criar reports
 
 // ── CALLS DISABLED — CALL CENTER MODE ──────────────────────────────────────
 // Safeguard has prohibited automated outbound calls via Bland.ai.
@@ -68,7 +69,7 @@ function getFortyEightHourState(report) {
 
 function esc(v) { return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '25mb' })); // 25mb p/ aceitar imagens base64 do bot da Anna
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
 app.use(express.static('public'));
@@ -685,6 +686,58 @@ app.post('/api/submit',
   }
 );
 
+
+// ── POST /api/bot/submit — cria report a partir do WhatsApp da Anna (chave) ──
+// JSON: campos da ordem + reason + notes + imagens em base64 (data URL).
+// NÃO dispara ligação — só cria o report (escritório/call center segue pelo dashboard).
+app.post('/api/bot/submit', express.json({ limit: '25mb' }), (req, res) => {
+  try {
+    const key = req.get('x-bot-key') || (req.body && req.body.key) || '';
+    if (!BOT_SUBMIT_KEY || key !== BOT_SUBMIT_KEY) return res.status(401).json({ error: 'unauthorized' });
+    const b = req.body || {};
+    const saveB64 = (dataUrl, dir) => {
+      if (!dataUrl) return null;
+      const m = String(dataUrl).match(/^data:(image\/[\w.+-]+);base64,(.+)$/s);
+      const mime = m ? m[1] : 'image/jpeg';
+      const ext = '.' + (mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg').replace(/[^\w]/g, '');
+      const data = m ? m[2] : dataUrl;
+      const fname = Date.now() + '-' + Math.round(Math.random() * 1e9) + ext;
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, fname), Buffer.from(data, 'base64'));
+      return fname;
+    };
+    const db = readDB();
+    const createdAt = nowISO();
+    const report = {
+      id:                  db.nextId++,
+      inspector_name:      b.inspector_name || '',
+      address:             b.address || '',
+      work_code:           b.work_code || '',
+      client:              b.client || '',
+      due_date:            b.due_date || '',
+      lockbox_code:        b.lockbox_code || '',
+      property_name:       b.property_name || '',
+      order_number:        b.order_number || '',
+      reason:              b.reason || '',
+      notes:               b.notes || '',
+      policy_holder_name:  '', policy_holder_phone: '',
+      agent_name:          '', agent_phone: '', insurance_carrier: '',
+      call_status:         'pending', calls: [], call_notes: '',
+      order_screenshot:    saveB64(b.order_image_b64, 'uploads/orders/'),
+      justification_photo: saveB64(b.justification_image_b64, 'uploads/justifications/'),
+      source:              'whatsapp_anna',
+      office_alert_text:   '', office_alert_sent_at: null,
+      office_timer_started_at: createdAt,
+      office_due_at:       addHours(createdAt, 48),
+      office_closed_at:    null,
+      created_at:          createdAt,
+      created_at_local:    nowLocal(),
+    };
+    db.reports.push(report);
+    writeDB(db);
+    res.json({ success: true, id: report.id, url: `${APP_BASE_URL}/dashboard` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 app.post('/api/reports/:id/office-timer/start', (req, res) => {
   try {
