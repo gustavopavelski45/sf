@@ -739,6 +739,58 @@ app.post('/api/bot/submit', express.json({ limit: '25mb' }), (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── POST /api/bot/import — restaura reports em lote a partir do backup CSV ──
+// Preserva id + created_at + contatos + call_status. Fotos não vêm (perdidas).
+// Idempotente: pula ids que já existem.
+app.post('/api/bot/import', express.json({ limit: '50mb' }), (req, res) => {
+  try {
+    const key = req.get('x-bot-key') || (req.body && req.body.key) || '';
+    if (!BOT_SUBMIT_KEY || key !== BOT_SUBMIT_KEY) return res.status(401).json({ error: 'unauthorized' });
+    const items = Array.isArray(req.body && req.body.reports) ? req.body.reports : [];
+    const db = readDB();
+    const existing = new Set(db.reports.map(r => Number(r.id)));
+    let added = 0;
+    for (const b of items) {
+      const id = Number(b.id);
+      if (!id || existing.has(id)) continue;
+      const createdAt = b.created_at || nowISO();
+      db.reports.push({
+        id,
+        inspector_name:      b.inspector_name || '',
+        address:             b.address || '',
+        work_code:           b.work_code || '',
+        client:              b.client || '',
+        due_date:            b.due_date || '',
+        lockbox_code:        b.lockbox_code || '',
+        property_name:       b.property_name || '',
+        order_number:        b.order_number || '',
+        reason:              b.reason || '',
+        notes:               b.notes || '',
+        policy_holder_name:  b.policy_holder_name || '',
+        policy_holder_phone: b.policy_holder_phone || '',
+        agent_name:          b.agent_name || '',
+        agent_phone:         b.agent_phone || '',
+        insurance_carrier:   b.insurance_carrier || '',
+        call_status:         b.call_status || 'pending',
+        calls: [], call_notes: '',
+        order_screenshot: null, justification_photo: null, call_screenshot: null,
+        source: 'csv_restore',
+        office_alert_text: '', office_alert_sent_at: null,
+        office_timer_started_at: createdAt,
+        office_due_at:       addHours(createdAt, 48),
+        office_closed_at:    null,
+        created_at:          createdAt,
+        created_at_local:    b.created_at_local || nowLocal(),
+      });
+      existing.add(id);
+      added++;
+    }
+    db.nextId = Math.max(db.nextId || 1, ...db.reports.map(r => Number(r.id) + 1));
+    writeDB(db);
+    res.json({ success: true, added, total: db.reports.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/reports/:id/office-timer/start', (req, res) => {
   try {
     const db  = readDB();
