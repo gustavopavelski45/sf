@@ -30,7 +30,7 @@ const BOT_SUBMIT_KEY = process.env.BOT_SUBMIT_KEY || ''; // chave p/ o WhatsApp 
 const CALLS_ENABLED = false;
 // ────────────────────────────────────────────────────────────────────────────
 
-['uploads/orders', 'uploads/justifications', 'data'].forEach(dir => {
+['data/uploads/orders', 'data/uploads/justifications', 'data'].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
@@ -73,7 +73,7 @@ app.use(express.json({ limit: '25mb' })); // 25mb p/ aceitar imagens base64 do b
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static('data/uploads')); // fotos no volume persistente
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/dashboard', (_req, res) => res.sendFile(path.join(__dirname, 'dashboard.html')));
 
@@ -81,10 +81,10 @@ app.get('/dashboard', (_req, res) => res.sendFile(path.join(__dirname, 'dashboar
 const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dirs = {
-      order_screenshot:    'uploads/orders/',
-      justification_photo: 'uploads/justifications/',
+      order_screenshot:    'data/uploads/orders/',
+      justification_photo: 'data/uploads/justifications/',
     };
-    cb(null, dirs[file.fieldname] || 'uploads/justifications/');
+    cb(null, dirs[file.fieldname] || 'data/uploads/justifications/');
   },
   filename: (req, file, cb) =>
     cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname))
@@ -723,8 +723,8 @@ app.post('/api/bot/submit', express.json({ limit: '25mb' }), (req, res) => {
       policy_holder_name:  '', policy_holder_phone: '',
       agent_name:          '', agent_phone: '', insurance_carrier: '',
       call_status:         'pending', calls: [], call_notes: '',
-      order_screenshot:    saveB64(b.order_image_b64, 'uploads/orders/'),
-      justification_photo: saveB64(b.justification_image_b64, 'uploads/justifications/'),
+      order_screenshot:    saveB64(b.order_image_b64, 'data/uploads/orders/'),
+      justification_photo: saveB64(b.justification_image_b64, 'data/uploads/justifications/'),
       source:              'whatsapp_anna',
       office_alert_text:   '', office_alert_sent_at: null,
       office_timer_started_at: createdAt,
@@ -808,7 +808,7 @@ app.delete('/api/reports/:id', (req, res) => {
     const idx = db.reports.findIndex(r => r.id === Number(req.params.id));
     if (idx === -1) return res.status(404).json({ error: 'Not found' });
     const r = db.reports[idx];
-    const fileDirs = { order_screenshot: 'uploads/orders/', justification_photo: 'uploads/justifications/' };
+    const fileDirs = { order_screenshot: 'data/uploads/orders/', justification_photo: 'data/uploads/justifications/' };
     Object.entries(fileDirs).forEach(([field, dir]) => {
       if (r[field]) {
         const p = path.join(dir, r[field]);
