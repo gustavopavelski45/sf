@@ -99,10 +99,11 @@ function blockSensitive(req, res, next) {
   next();
 }
 
-// 2) Basic Auth do escritório para o dashboard, as fotos e as APIs de dados.
-//    Aberto de propósito: bot da Anna (x-bot-key), webhook do Bland, health e o
-//    site público (/, css, imagens).
+// 2) Login por SENHA (sem usuário) para o dashboard, as fotos e as APIs de dados.
+//    Página /login + cookie de sessão. Aberto de propósito: /login, bot da Anna
+//    (x-bot-key), webhook do Bland, health e o site público (/, css, imagens).
 function needsAuth(p) {
+  if (p === '/login' || p === '/api/login' || p === '/logout') return false;
   if (p === '/api/health') return false;
   if (p.startsWith('/api/bot/')) return false;       // Anna (x-bot-key)
   if (p === '/api/bland/webhook') return false;       // Bland posta aqui
@@ -116,22 +117,64 @@ function safeEqual(a, b) {
   const ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
   return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
 }
+// Token de sessão derivado da senha: quem sabe a senha recebe este token no
+// cookie. Trocar DASHBOARD_PASSWORD invalida todos os logins automaticamente.
+function sessionToken() {
+  return require('crypto').createHmac('sha256', DASHBOARD_PASSWORD || 'x').update('jba-office-v1').digest('hex');
+}
+function isAuthed(req) {
+  if (!DASHBOARD_PASSWORD) return false;
+  const m = String(req.headers.cookie || '').match(/(?:^|;\s*)jba_auth=([^;]+)/);
+  return !!(m && safeEqual(m[1], sessionToken()));
+}
 function requireAuth(req, res, next) {
-  if (!needsAuth(req.path || '')) return next();
-  if (!DASHBOARD_PASSWORD) {
-    return res.status(503).send('Dashboard bloqueado: defina DASHBOARD_PASSWORD no Railway.');
-  }
-  const m = String(req.get('authorization') || '').match(/^Basic (.+)$/i);
-  if (m) {
-    const [u, ...rest] = Buffer.from(m[1], 'base64').toString().split(':');
-    const pass = rest.join(':');
-    if (u === DASHBOARD_USER && safeEqual(pass, DASHBOARD_PASSWORD)) return next();
-  }
-  res.set('WWW-Authenticate', 'Basic realm="JBA Office", charset="UTF-8"');
-  return res.status(401).send('Acesso restrito ao escritorio.');
+  const p = req.path || '';
+  if (!needsAuth(p)) return next();
+  if (!DASHBOARD_PASSWORD) return res.status(503).send('Dashboard bloqueado: defina DASHBOARD_PASSWORD no Railway.');
+  if (isAuthed(req)) return next();
+  if (p.startsWith('/api/')) return res.status(401).json({ error: 'unauthorized' });
+  return res.redirect('/login');            // página → manda pro login
 }
 app.use(blockSensitive);
 app.use(requireAuth);
+
+// ── Página de login (só senha) + set/clear do cookie ─────────────────────────
+const LOGIN_HTML = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>JBA — Acesso</title>
+<style>
+  body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#f4f5f2;color:#1c2620;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}
+  .box{background:#fff;border:1px solid rgba(20,32,26,.1);border-radius:16px;padding:32px 28px;width:320px;max-width:100%;text-align:center;box-shadow:0 10px 30px rgba(20,32,26,.08)}
+  h1{font-size:17px;margin:0 0 4px} p{color:#68746b;font-size:13px;margin:0 0 20px}
+  input{width:100%;padding:11px 12px;border:1px solid rgba(20,32,26,.15);border-radius:9px;font-size:15px;margin-bottom:10px;box-sizing:border-box}
+  input:focus{outline:0;border-color:#e8932e}
+  button{width:100%;padding:11px;border:0;border-radius:9px;background:#e8932e;color:#fff;font-weight:600;font-size:15px;cursor:pointer}
+  .err{color:#a8362f;font-size:13px;height:18px;margin-top:8px}
+</style></head><body>
+<form class="box" onsubmit="return go(event)">
+  <h1>JBA Property Solutions</h1><p>Escritório — acesso restrito</p>
+  <input id="pw" type="password" placeholder="Senha" autocomplete="current-password" autofocus>
+  <button type="submit">Entrar</button><div class="err" id="err"></div>
+</form>
+<script>
+async function go(e){e.preventDefault();
+  const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:document.getElementById('pw').value})});
+  if(r.ok){location.href='/dashboard'} else {document.getElementById('err').textContent='Senha incorreta'} return false;}
+</script></body></html>`;
+
+app.get('/login', (_req, res) => res.type('html').send(LOGIN_HTML));
+app.post('/api/login', (req, res) => {
+  if (!DASHBOARD_PASSWORD) return res.status(503).json({ error: 'not configured' });
+  const pass = (req.body && req.body.password) || '';
+  if (safeEqual(pass, DASHBOARD_PASSWORD)) {
+    res.set('Set-Cookie', `jba_auth=${sessionToken()}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`);
+    return res.json({ ok: true });
+  }
+  return res.status(401).json({ ok: false });
+});
+app.get('/logout', (_req, res) => {
+  res.set('Set-Cookie', 'jba_auth=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
+  res.redirect('/login');
+});
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.use(express.static(__dirname));
