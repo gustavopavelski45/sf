@@ -103,6 +103,10 @@ function blockSensitive(req, res, next) {
 //    Página /login + cookie de sessão. Aberto de propósito: /login, bot da Anna
 //    (x-bot-key), webhook do Bland, health e o site público (/, css, imagens).
 function needsAuth(p) {
+  // Express roteia SEM diferenciar maiúscula/minúscula, então /API/reports cai
+  // no mesmo handler de /api/reports. Normaliza pra minúsculo ANTES de decidir,
+  // senão dá bypass do login por caixa alta (achado no pentest 2026-08-20).
+  p = (p || '').toLowerCase();
   if (p === '/login' || p === '/api/login' || p === '/logout') return false;
   if (p === '/api/health') return false;
   if (p.startsWith('/api/bot/')) return false;       // Anna (x-bot-key)
@@ -132,7 +136,7 @@ function requireAuth(req, res, next) {
   if (!needsAuth(p)) return next();
   if (!DASHBOARD_PASSWORD) return res.status(503).send('Dashboard bloqueado: defina DASHBOARD_PASSWORD no Railway.');
   if (isAuthed(req)) return next();
-  if (p.startsWith('/api/')) return res.status(401).json({ error: 'unauthorized' });
+  if (p.toLowerCase().startsWith('/api/')) return res.status(401).json({ error: 'unauthorized' });
   return res.redirect('/login');            // página → manda pro login
 }
 app.use(blockSensitive);
