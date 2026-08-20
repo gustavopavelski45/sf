@@ -15,12 +15,22 @@ const https   = require('https');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-const OCR_API_KEY        = process.env.OCR_API_KEY        || 'P8983M3NMKM8X';
-const OCR_API_KEY_BACKUP = process.env.OCR_API_KEY_BACKUP || 'K85989969588957';
+// Chaves de OCR: SEM fallback hardcoded. As antigas ('P8983...'/'K85989...')
+// VAZARAM (o server.js estava público) — precisam ser rotacionadas no ocr.space
+// e definidas no Railway (OCR_API_KEY / OCR_API_KEY_BACKUP).
+const OCR_API_KEY        = process.env.OCR_API_KEY        || '';
+const OCR_API_KEY_BACKUP = process.env.OCR_API_KEY_BACKUP || '';
 const BLAND_API_KEY = process.env.BLAND_API_KEY  || '';
 const APP_BASE_URL  = process.env.APP_BASE_URL   || `http://localhost:${process.env.PORT || 3000}`;
 const JBA_PHONE     = process.env.JBA_PHONE || '(614) 304-3490';
 const BOT_SUBMIT_KEY = process.env.BOT_SUBMIT_KEY || ''; // chave p/ o WhatsApp da Anna criar reports
+
+// ── Senha do escritório (Basic Auth do dashboard + APIs de dados) ──
+// FAIL-CLOSED: sem DASHBOARD_PASSWORD setada no Railway, as rotas protegidas
+// respondem 503 (melhor trancado que vazando). O bot da Anna (x-bot-key) e o
+// webhook do Bland NÃO passam por aqui.
+const DASHBOARD_USER     = process.env.DASHBOARD_USER || 'jba';
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || '';
 
 // ── CALLS DISABLED — CALL CENTER MODE ──────────────────────────────────────
 // Safeguard has prohibited automated outbound calls via Bland.ai.
@@ -71,6 +81,59 @@ function esc(v) { return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 app.use(cors());
 app.use(express.json({ limit: '25mb' })); // 25mb p/ aceitar imagens base64 do bot da Anna
 app.use(express.urlencoded({ extended: true }));
+
+// ── SEGURANÇA ───────────────────────────────────────────────────────────────
+// 1) NUNCA servir código-fonte, o banco cru ou config como arquivo estático.
+//    (o express.static(__dirname) abaixo servia /server.js, /package.json e o
+//    banco inteiro em /data/reports.json — vazamento total de PII e chaves.)
+function blockSensitive(req, res, next) {
+  const p = (req.path || '').toLowerCase();
+  if (
+    p === '/server.js' || p === '/package.json' || p === '/package-lock.json' ||
+    p === '/gitignore' || p.startsWith('/.git') || p.startsWith('/data') ||
+    p.startsWith('/node_modules') || p === '/dashboard.html' || p.endsWith('.env') ||
+    p.endsWith('.json')
+  ) {
+    return res.status(404).send('Not found');
+  }
+  next();
+}
+
+// 2) Basic Auth do escritório para o dashboard, as fotos e as APIs de dados.
+//    Aberto de propósito: bot da Anna (x-bot-key), webhook do Bland, health e o
+//    site público (/, css, imagens).
+function needsAuth(p) {
+  if (p === '/api/health') return false;
+  if (p.startsWith('/api/bot/')) return false;       // Anna (x-bot-key)
+  if (p === '/api/bland/webhook') return false;       // Bland posta aqui
+  if (p === '/dashboard' || p === '/dashboard.html') return true;
+  if (p.startsWith('/uploads')) return true;          // fotos = PII
+  if (p.startsWith('/api/')) return true;             // todo o resto da API
+  return false;                                       // site público
+}
+function safeEqual(a, b) {
+  const crypto = require('crypto');
+  const ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+function requireAuth(req, res, next) {
+  if (!needsAuth(req.path || '')) return next();
+  if (!DASHBOARD_PASSWORD) {
+    return res.status(503).send('Dashboard bloqueado: defina DASHBOARD_PASSWORD no Railway.');
+  }
+  const m = String(req.get('authorization') || '').match(/^Basic (.+)$/i);
+  if (m) {
+    const [u, ...rest] = Buffer.from(m[1], 'base64').toString().split(':');
+    const pass = rest.join(':');
+    if (u === DASHBOARD_USER && safeEqual(pass, DASHBOARD_PASSWORD)) return next();
+  }
+  res.set('WWW-Authenticate', 'Basic realm="JBA Office", charset="UTF-8"');
+  return res.status(401).send('Acesso restrito ao escritorio.');
+}
+app.use(blockSensitive);
+app.use(requireAuth);
+// ─────────────────────────────────────────────────────────────────────────────
+
 app.use(express.static(__dirname));
 app.use(express.static('public'));
 app.use('/uploads', express.static('data/uploads')); // fotos no volume persistente
