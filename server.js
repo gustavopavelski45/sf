@@ -91,7 +91,7 @@ function blockSensitive(req, res, next) {
   if (
     p === '/server.js' || p === '/package.json' || p === '/package-lock.json' ||
     p === '/gitignore' || p.startsWith('/.git') || p.startsWith('/data') ||
-    p.startsWith('/node_modules') || p === '/dashboard.html' || p.endsWith('.env') ||
+    p.startsWith('/node_modules') || p.endsWith('.env') ||
     p.endsWith('.json')
   ) {
     return res.status(404).send('Not found');
