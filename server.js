@@ -11,6 +11,12 @@ const cors    = require('cors');
 const path    = require('path');
 const fs      = require('fs');
 const https   = require('https');
+const {
+  hasBotReportsAccess,
+  safeEqual,
+  selectBotReports,
+  validateBotReportsQuery,
+} = require('./bot-reports');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -24,6 +30,8 @@ const BLAND_API_KEY = process.env.BLAND_API_KEY  || '';
 const APP_BASE_URL  = process.env.APP_BASE_URL   || `http://localhost:${process.env.PORT || 3000}`;
 const JBA_PHONE     = process.env.JBA_PHONE || '(614) 304-3490';
 const BOT_SUBMIT_KEY = process.env.BOT_SUBMIT_KEY || ''; // chave p/ o WhatsApp da Anna criar reports
+// Chave separada, estritamente read-only, para a Anna reconciliar os reportes.
+const BOT_REPORTS_READ_KEY = process.env.BOT_REPORTS_READ_KEY || '';
 
 // ── Senha do escritório (Basic Auth do dashboard + APIs de dados) ──
 // FAIL-CLOSED: sem DASHBOARD_PASSWORD setada no Railway, as rotas protegidas
@@ -44,7 +52,7 @@ const CALLS_ENABLED = false;
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
-const DB_FILE = './data/reports.json';
+const DB_FILE = process.env.REPORTS_DB_FILE || './data/reports.json';
 function readDB()    { try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { return { nextId: 1, reports: [] }; } }
 function writeDB(db) { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); }
 function nowISO()    { return new Date().toISOString(); }
@@ -115,11 +123,6 @@ function needsAuth(p) {
   if (p.startsWith('/uploads')) return true;          // fotos = PII
   if (p.startsWith('/api/')) return true;             // todo o resto da API
   return false;                                       // site público
-}
-function safeEqual(a, b) {
-  const crypto = require('crypto');
-  const ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
-  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
 }
 // Token de sessão derivado da senha: quem sabe a senha recebe este token no
 // cookie. Trocar DASHBOARD_PASSWORD invalida todos os logins automaticamente.
@@ -849,6 +852,25 @@ app.post('/api/bot/submit', express.json({ limit: '25mb' }), (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── GET /api/bot/reports — espelho read-only e minimizado para a Anna ──
+// Exige uma chave diferente da chave de escrita e devolve somente os campos
+// necessários para o relatório UTW. Fotos, lockbox, telefones, chamadas e notas
+// livres continuam restritos ao dashboard humano autenticado.
+app.get('/api/bot/reports', (req, res) => {
+  try {
+    if (!hasBotReportsAccess(req, BOT_REPORTS_READ_KEY)) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+    const range = validateBotReportsQuery(req.query || {});
+    if (!range.ok) return res.status(400).json({ error: range.error });
+    const reports = selectBotReports(readDB().reports, range.startDate, range.endDate);
+    res.set('Cache-Control', 'no-store');
+    return res.json({ reports });
+  } catch (_err) {
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 // ── POST /api/bot/import — restaura reports em lote a partir do backup CSV ──
 // Preserva id + created_at + contatos + call_status. Fotos não vêm (perdidas).
 // Idempotente: pula ids que já existem.
@@ -1024,12 +1046,16 @@ app.get('/api/export.csv', (_req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.listen(PORT, () => {
-  console.log('✅  JBA Field Inspector App v3');
-  console.log(`   Inspector  →  http://localhost:${PORT}/`);
-  console.log(`   Dashboard  →  http://localhost:${PORT}/dashboard.html`);
-  console.log(`   OCR        →  OCR.space ✅ configured (${OCR_API_KEY.slice(0,6)}...)`);
-  console.log(`   Bland.ai   →  ${BLAND_API_KEY ? '✅ configured' : '⚠️  BLAND_API_KEY not set — add to env'}`);
-  console.log(`   Mode       →  📋  CALL CENTER QUEUE (automated calls disabled per Safeguard policy)`);
-  console.log(`   Webhook    →  POST ${APP_BASE_URL}/api/bland/webhook\n`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log('✅  JBA Field Inspector App v3');
+    console.log(`   Inspector  →  http://localhost:${PORT}/`);
+    console.log(`   Dashboard  →  http://localhost:${PORT}/dashboard.html`);
+    console.log(`   OCR        →  OCR.space ✅ configured (${OCR_API_KEY.slice(0,6)}...)`);
+    console.log(`   Bland.ai   →  ${BLAND_API_KEY ? '✅ configured' : '⚠️  BLAND_API_KEY not set — add to env'}`);
+    console.log(`   Mode       →  📋  CALL CENTER QUEUE (automated calls disabled per Safeguard policy)`);
+    console.log(`   Webhook    →  POST ${APP_BASE_URL}/api/bland/webhook\n`);
+  });
+}
+
+module.exports = { app };
